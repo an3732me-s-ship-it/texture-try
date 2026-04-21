@@ -5,35 +5,50 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('cube-texture-dial', {
+      AFRAME.registerComponent('texture-manager', {
+        init: function() {
+          this.loader = new THREE.TextureLoader();
+          console.log("Blender Model Tester: Active");
+        },
+
         tick: function () {
           const dial = document.querySelector('#marker-dial');
-          const cube = document.querySelector('#testCube');
+          const targets = document.querySelectorAll('.swappable');
 
-          if (dial && dial.object3D.visible && cube) {
-            // 1. Get rotation
+          if (dial && dial.object3D.visible) {
             let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
             let angle = ((rotY % 360) + 360) % 360;
 
-            // 2. Select texture path based on angle
-            let targetTexture;
-            if (angle >= 300 || angle < 60) {
-              targetTexture = 'textures/plaster_diffuse.jpg';
-            } else if (angle >= 60 && angle < 180) {
-              targetTexture = 'textures/metal_diffuse.jpg';
-            } else {
-              targetTexture = 'textures/wood_diffuse.jpg';
-            }
+            // Determine texture path
+            let path;
+            if (angle >= 300 || angle < 60) path = 'textures/plaster_diffuse.jpg';
+            else if (angle >= 60 && angle < 180) path = 'textures/metal_diffuse.jpg';
+            else path = 'textures/wood_diffuse.jpg';
 
-            // 3. Apply texture to the cube using A-Frame's setAttribute
-            // We check the current src to prevent unnecessary refreshes
-            let currentSrc = cube.getAttribute('material').src;
-            if (currentSrc !== targetTexture) {
-              cube.setAttribute('material', {
-                src: targetTexture,
-                color: '#FFFFFF'
-              });
-            }
+            targets.forEach(el => {
+              const meshObj = el.getObject3D('mesh');
+              if (meshObj) {
+                meshObj.traverse((node) => {
+                  if (node.isMesh) {
+                    // Only update if the path changed to prevent flickering
+                    if (node.userData.currentPath !== path) {
+                      this.loader.load(path, (texture) => {
+                        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                        // Blender 'Smart UV Project' usually needs a higher repeat
+                        texture.repeat.set(4, 4); 
+                        
+                        node.material.map = texture;
+                        node.material.color.set('#FFFFFF');
+                        node.material.needsUpdate = true;
+                        
+                        node.userData.currentPath = path;
+                        console.log(`Updated ${node.name || 'mesh'} to ${path}`);
+                      });
+                    }
+                  }
+                });
+              }
+            });
           }
         }
       });
@@ -41,22 +56,24 @@
   </head>
 
   <body style="margin: 0px; overflow: hidden;">
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" cube-texture-dial>
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" texture-manager>
       
-      <a-assets>
-        <img id="tex-wood" src="textures/wood_diffuse.jpg" crossorigin="anonymous">
-        <img id="tex-plaster" src="textures/plaster_diffuse.jpg" crossorigin="anonymous">
-        <img id="tex-metal" src="textures/metal_diffuse.jpg" crossorigin="anonymous">
-      </a-assets>
-
-      <a-entity light="type: ambient; intensity: 0.9;"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.6;" position="1 4 2"></a-entity>
 
       <a-marker type="pattern" url="pattern-connect.patt">
-        <a-box id="testCube" position="0 0.5 0" scale="1 1 1" material="color: white"></a-box>
+        <a-entity id="stairModel" 
+                  class="swappable" 
+                  gltf-model="url(stair.glb)" 
+                  scale="1 1 1" 
+                  position="0 0 0">
+        </a-entity>
+        
+        <a-box id="testBox" class="swappable" position="1.2 0.25 0" scale="0.5 0.5 0.5"></a-box>
       </a-marker>
 
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
-        <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
+        <a-box position="0 0.1 0" scale="0.1 0.5 0.1" color="red"></a-box>
       </a-marker>
 
       <a-entity camera></a-entity>
