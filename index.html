@@ -6,61 +6,68 @@
 
     <script>
   AFRAME.registerComponent('texture-manager', {
-    init: function() {
-      // Create a loader to handle the images manually
-      this.loader = new THREE.TextureLoader();
-      console.log("Texture Manager Ready");
-    },
+  init: function() {
+    this.loader = new THREE.TextureLoader();
+  },
 
-    tick: function () {
-      const dial = document.querySelector('#marker-dial');
-      const targets = document.querySelectorAll('.swappable');
+  tick: function () {
+    const dial = document.querySelector('#marker-dial');
+    const targets = document.querySelectorAll('.swappable');
 
-      // 1. Check if dial is visible
-      if (dial && dial.object3D.visible) {
-        let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
-        let angle = ((rotY % 360) + 360) % 360;
+    // NEW LOGIC: Only apply textures if the dial is VISIBLE
+    if (dial && dial.object3D.visible) {
+      let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
+      let angle = ((rotY % 360) + 360) % 360;
 
-        // 2. Decide the file path
-        let texturePath;
-        if (angle >= 300 || angle < 60) {
-          texturePath = 'textures/plaster_diffuse.jpg';
-        } else if (angle >= 60 && angle < 180) {
-          texturePath = 'textures/metal_diffuse.jpg';
-        } else {
-          texturePath = 'textures/wood_diffuse.jpg';
-        }
+      let texturePath;
+      if (angle >= 300 || angle < 60) texturePath = 'textures/plaster_diffuse.jpg';
+      else if (angle >= 60 && angle < 180) texturePath = 'textures/metal_diffuse.jpg';
+      else texturePath = 'textures/wood_diffuse.jpg';
 
-        // 3. Apply to all targets
-        targets.forEach(el => {
-          const mesh = el.getObject3D('mesh');
-          if (mesh) {
-            mesh.traverse((node) => {
-              if (node.isMesh) {
-                // Only update if the texture path actually changed
-                if (!node.userData.currentPath || node.userData.currentPath !== texturePath) {
-                  
-                  // Manually load the texture
-                  this.loader.load(texturePath, (texture) => {
-                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                    texture.repeat.set(2, 2); 
-                    
-                    node.material = new THREE.MeshStandardMaterial({
-                      map: texture,
-                      color: 0xffffff
-                    });
-                    
-                    node.userData.currentPath = texturePath;
-                    console.log("Applied texture: " + texturePath);
+      this.updateModels(targets, texturePath, true);
+    } else {
+      // IF DIAL IS MISSING: Go back to neutral
+      this.updateModels(targets, null, false);
+    }
+  },
+
+  updateModels: function(targets, path, isActive) {
+    targets.forEach(el => {
+      const mesh = el.getObject3D('mesh');
+      if (mesh) {
+        mesh.traverse((node) => {
+          if (node.isMesh) {
+            if (isActive) {
+              // APPLY TEXTURE
+              if (node.userData.currentPath !== path) {
+                this.loader.load(path, (texture) => {
+                  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                  texture.repeat.set(2, 2);
+                  node.material = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    color: 0xffffff, // Pure white base for textures
+                    roughness: 0.5
                   });
-                }
+                  node.userData.currentPath = path;
+                });
               }
-            });
+            } else {
+              // RESET TO NEUTRAL (White)
+              if (node.userData.currentPath !== 'neutral') {
+                node.material = new THREE.MeshStandardMaterial({
+                  map: null,
+                  color: 0xffffff, // Force this to white
+                  roughness: 0.8
+                });
+                node.userData.currentPath = 'neutral';
+              }
+            }
           }
         });
       }
-    }
-  });
+    });
+  }
+});
 </script>
 
 <body style="margin: 0px; overflow: hidden;">
