@@ -8,100 +8,89 @@
 
     <script>
       AFRAME.registerComponent('four-texture-proximity', {
-        init: function() {
-          this.loader = new THREE.TextureLoader();
-          // Reusable vectors for performance
-          this.dialPos = new THREE.Vector3();
-          this.targetPos = new THREE.Vector3();
-          console.log("Proximity System Active: 5cm Marker Calibration");
-        },
+  init: function() {
+    this.loader = new THREE.TextureLoader();
+    this.dialPos = new THREE.Vector3();
+    this.targetPos = new THREE.Vector3();
+    console.log("Proximity System Active - Check Console for distance");
+  },
 
-        tick: function () {
-          const dialMarker = document.querySelector('#marker-dial');
-          const stairMarker = document.querySelector('#marker-stair');
-          const targets = document.querySelectorAll('.swappable');
+  tick: function () {
+    const dialMarker = document.querySelector('#marker-dial');
+    const stairMarker = document.querySelector('#marker-stair');
+    const targets = document.querySelectorAll('.swappable');
 
-          // Ensure both markers are in the camera view to calculate distance
-          if (dialMarker && dialMarker.object3D.visible && stairMarker && stairMarker.object3D.visible) {
-            
-            // 1. Get World Positions
-            dialMarker.object3D.getWorldPosition(this.dialPos);
-            stairMarker.object3D.getWorldPosition(this.targetPos);
-            
-            // 2. Calculate Distance
-            const distance = this.dialPos.distanceTo(this.targetPos);
+    // DEBUG: Check if markers are even seen
+    if (dialMarker && dialMarker.object3D.visible && stairMarker && stairMarker.object3D.visible) {
+      
+      dialMarker.object3D.getWorldPosition(this.dialPos);
+      stairMarker.object3D.getWorldPosition(this.targetPos);
+      
+      const distance = this.dialPos.distanceTo(this.targetPos);
 
-            // 3. Proximity Threshold: 0.12 is approx 12cm. 
-            // Decrease to 0.08 if you want them to be almost touching.
-            const proximityThreshold = 0.12; 
+      // INCREASING THIS: 0.3 means 30cm. This is much safer for 5cm markers.
+      const proximityThreshold = 0.3; 
 
-            if (distance < proximityThreshold) {
-              // --- WITHIN RANGE: CALCULATE ROTATION ---
-              var vector = new THREE.Vector3(0, 0, 1);
-              vector.applyQuaternion(dialMarker.object3D.quaternion);
-              let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-              angle = (angle + 360) % 360;
+      if (distance < proximityThreshold) {
+        var vector = new THREE.Vector3(0, 0, 1);
+        vector.applyQuaternion(dialMarker.object3D.quaternion);
+        let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+        angle = (angle + 360) % 360;
 
-              let path;
-              if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
-              else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
-              else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
-              else path = 'textures/brick_diffuse.jpg';
+        let path;
+        if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
+        else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
+        else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
+        else path = 'textures/brick_diffuse.jpg';
 
-              this.updateModels(targets, path, true);
+        this.updateModels(targets, path, true);
+      } else {
+        this.updateModels(targets, null, false);
+      }
+    } else {
+      // If the markers aren't visible, we reset to neutral
+      this.updateModels(targets, null, false);
+    }
+  },
+
+  updateModels: function(targets, path, isActive) {
+    targets.forEach(el => {
+      const meshObj = el.getObject3D('mesh');
+      if (meshObj) {
+        meshObj.traverse((node) => {
+          if (node.isMesh) {
+            if (isActive) {
+              if (node.userData.currentPath !== path) {
+                this.loader.load(path, (texture) => {
+                  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                  texture.repeat.set(4, 4);
+                  node.material = new THREE.MeshStandardMaterial({ 
+                    map: texture, 
+                    color: '#FFFFFF',
+                    roughness: 0.6,
+                    side: THREE.DoubleSide 
+                  });
+                  node.userData.currentPath = path;
+                  console.log("Success! Applied: " + path);
+                });
+              }
             } else {
-              // --- TOO FAR: RESET TO WHITE ---
-              this.updateModels(targets, null, false);
+              if (node.userData.currentPath !== 'neutral') {
+                // FORCE TO WHITE
+                node.material = new THREE.MeshStandardMaterial({ 
+                    color: '#FFFFFF', 
+                    map: null,
+                    roughness: 0.9 
+                });
+                node.userData.currentPath = 'neutral';
+              }
             }
-          } else {
-            // --- MARKERS LOST: RESET TO WHITE ---
-            this.updateModels(targets, null, false);
           }
-        },
-
-        updateModels: function(targets, path, isActive) {
-          targets.forEach(el => {
-            const meshObj = el.getObject3D('mesh');
-            if (meshObj) {
-              meshObj.traverse((node) => {
-                if (node.isMesh) {
-                  if (isActive) {
-                    // Update texture only if it has changed
-                    if (node.userData.currentPath !== path) {
-                      this.loader.load(path, (texture) => {
-                        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(4, 4); // Adjust for grain density
-                        
-                        node.material.map = texture;
-                        node.material.color.set('#FFFFFF');
-                        
-                        // Lighting properties
-                        node.material.roughness = path.includes('metal') ? 0.2 : 0.7;
-                        node.material.metalness = path.includes('metal') ? 0.8 : 0.0;
-                        node.material.side = THREE.DoubleSide;
-                        
-                        node.material.needsUpdate = true;
-                        node.userData.currentPath = path;
-                        console.log("Applied: " + path);
-                      });
-                    }
-                  } else {
-                    // Reset to Neutral Architectural White
-                    if (node.userData.currentPath !== 'neutral') {
-                      node.material.map = null;
-                      node.material.color.set('#FFFFFF');
-                      node.material.roughness = 0.9;
-                      node.material.metalness = 0.0;
-                      node.material.needsUpdate = true;
-                      node.userData.currentPath = 'neutral';
-                    }
-                  }
-                }
-              });
-            }
-          });
-        }
-      });
+        });
+      }
+    });
+  }
+});
     </script>
   </head>
 
