@@ -5,47 +5,52 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-     AFRAME.registerComponent('texture-dial', {
-  tick: function () {
-    const dial = document.querySelector('#marker-dial');
-    const stair = document.querySelector('#stairModel');
+      AFRAME.registerComponent('texture-dial', {
+        tick: function () {
+          const dial = document.querySelector('#marker-dial');
+          const targets = document.querySelectorAll('.swappable');
 
-    if (dial && dial.object3D.visible && stair) {
-      let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
-      let angle = ((rotY % 360) + 360) % 360;
+          if (dial && dial.object3D.visible) {
+            // 1. Get rotation and normalize
+            let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
+            let angle = ((rotY % 360) + 360) % 360;
 
-      let targetAssetId;
-      if (angle >= 300 || angle < 60) {
-        targetAssetId = '#tex-plaster';
-      } else if (angle >= 60 && angle < 180) {
-        targetAssetId = '#tex-metal';
-      } else {
-        targetAssetId = '#tex-wood';
-      }
-
-      const assetEl = document.querySelector(targetAssetId);
-      if (assetEl && assetEl.texture) {
-        const activeTexture = assetEl.texture;
-        const mesh = stair.getObject3D('mesh');
-        
-        if (mesh) {
-          mesh.traverse((node) => {
-            if (node.isMesh) {
-              // FORCE overwrite: even if the material was "baked"
-              node.material.map = activeTexture;
-              node.material.color.set('#FFFFFF'); 
-              node.material.needsUpdate = true;
-              
-              // This is the "magic" line for stubborn GLBs:
-              // It ensures the texture wraps correctly if it's a tile
-              activeTexture.wrapS = activeTexture.wrapT = THREE.RepeatWrapping;
+            // 2. Select Texture Asset
+            let targetAssetId;
+            if (angle >= 300 || angle < 60) {
+              targetAssetId = '#tex-plaster';
+            } else if (angle >= 60 && angle < 180) {
+              targetAssetId = '#tex-metal';
+            } else {
+              targetAssetId = '#tex-wood';
             }
-          });
+
+            const assetEl = document.querySelector(targetAssetId);
+            
+            if (assetEl && assetEl.texture) {
+              const activeTexture = assetEl.texture;
+              
+              // Ensure texture tiles correctly
+              activeTexture.wrapS = activeTexture.wrapT = THREE.RepeatWrapping;
+
+              // 3. Apply to all swappable entities
+              targets.forEach(el => {
+                const mesh = el.getObject3D('mesh');
+                if (mesh) {
+                  mesh.traverse((node) => {
+                    if (node.isMesh) {
+                      // Force material update
+                      node.material.map = activeTexture;
+                      node.material.color.set('#FFFFFF');
+                      node.material.needsUpdate = true;
+                    }
+                  });
+                }
+              });
+            }
+          }
         }
-      }
-    }
-  }
-});
+      });
     </script>
   </head>
 
@@ -62,7 +67,11 @@
       <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
 
       <a-marker type="pattern" url="pattern-connect.patt">
-        <a-entity id="stairModel" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
+        
+        <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
+        
+        <a-box id="testBox" class="swappable" position="1.5 0.5 0" scale="0.5 0.5 0.5" color="white"></a-box>
+        
       </a-marker>
 
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
