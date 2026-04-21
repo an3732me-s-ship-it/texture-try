@@ -14,23 +14,34 @@
       let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
       let angle = ((rotY % 360) + 360) % 360;
 
-      let targetTexture;
+      let targetAssetId;
       if (angle >= 300 || angle < 60) {
-        targetTexture = 'textures/plaster_diffuse.jpg';
+        targetAssetId = '#tex-plaster';
       } else if (angle >= 60 && angle < 180) {
-        targetTexture = 'textures/metal_diffuse.jpg';
+        targetAssetId = '#tex-metal';
       } else {
-        targetTexture = 'textures/wood_diffuse.jpg';
+        targetAssetId = '#tex-wood';
       }
 
-      // Check if the current texture is already applied to avoid "stuttering"
-      const currentMat = stair.getAttribute('material');
-      if (!currentMat || currentMat.src !== targetTexture) {
-        stair.setAttribute('material', {
-          src: targetTexture,
-          color: '#FFFFFF',
-          shader: 'flat' // This helps us see if the image is working at all
-        });
+      const assetEl = document.querySelector(targetAssetId);
+      if (assetEl && assetEl.texture) {
+        const activeTexture = assetEl.texture;
+        const mesh = stair.getObject3D('mesh');
+        
+        if (mesh) {
+          mesh.traverse((node) => {
+            if (node.isMesh) {
+              // FORCE overwrite: even if the material was "baked"
+              node.material.map = activeTexture;
+              node.material.color.set('#FFFFFF'); 
+              node.material.needsUpdate = true;
+              
+              // This is the "magic" line for stubborn GLBs:
+              // It ensures the texture wraps correctly if it's a tile
+              activeTexture.wrapS = activeTexture.wrapT = THREE.RepeatWrapping;
+            }
+          });
+        }
       }
     }
   }
