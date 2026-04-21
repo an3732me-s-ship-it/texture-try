@@ -1,1 +1,71 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
+    <script>
+      AFRAME.registerComponent('texture-dial', {
+        tick: function () {
+          const dial = document.querySelector('#marker-dial');
+          const stair = document.querySelector('#stairModel');
+
+          if (dial && dial.object3D.visible && stair) {
+            let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
+            let angle = ((rotY % 360) + 360) % 360;
+
+            let targetAssetId;
+            if (angle >= 300 || angle < 60) {
+              targetAssetId = '#tex-plaster';
+            } else if (angle >= 60 && angle < 180) {
+              targetAssetId = '#tex-metal';
+            } else {
+              targetAssetId = '#tex-wood';
+            }
+
+            const assetEl = document.querySelector(targetAssetId);
+            if (assetEl && assetEl.texture) {
+              const activeTexture = assetEl.texture;
+              const mesh = stair.getObject3D('mesh');
+              
+              if (mesh) {
+                mesh.traverse((node) => {
+                  if (node.isMesh) {
+                    // Update the texture map
+                    node.material.map = activeTexture;
+                    node.material.color.set('#FFFFFF'); 
+                    node.material.needsUpdate = true;
+                  }
+                });
+              }
+            }
+          }
+        }
+      });
+    </script>
+  </head>
+
+  <body style="margin: 0px; overflow: hidden;">
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" texture-dial>
+      
+      <a-assets>
+        <img id="tex-wood" src="textures/wood_diffuse.jpg" crossorigin="anonymous">
+        <img id="tex-plaster" src="textures/plaster_diffuse.jpg" crossorigin="anonymous">
+        <img id="tex-metal" src="textures/metal_diffuse.jpg" crossorigin="anonymous">
+      </a-assets>
+
+      <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
+
+      <a-marker type="pattern" url="pattern-connect.patt">
+        <a-entity id="stairModel" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
+      </a-marker>
+
+      <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
+        <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
+      </a-marker>
+
+      <a-entity camera></a-entity>
+    </a-scene>
+  </body>
+</html>
