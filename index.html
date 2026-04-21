@@ -5,83 +5,86 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('texture-manager', {
-        tick: function () {
-          const dial = document.querySelector('#marker-dial');
-          const targets = document.querySelectorAll('.swappable');
+      <script>
+  AFRAME.registerComponent('texture-manager', {
+    init: function() {
+      // Create a loader to handle the images manually
+      this.loader = new THREE.TextureLoader();
+      console.log("Texture Manager Ready");
+    },
 
-          if (dial && dial.object3D.visible) {
-            // 1. Get rotation and normalize to 0-360
-            let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
-            let angle = ((rotY % 360) + 360) % 360;
+    tick: function () {
+      const dial = document.querySelector('#marker-dial');
+      const targets = document.querySelectorAll('.swappable');
 
-            // 2. Map rotation zones to Asset IDs
-            let targetId;
-            if (angle >= 300 || angle < 60) {
-              targetId = '#tex-plaster';
-            } else if (angle >= 60 && angle < 180) {
-              targetId = '#tex-metal';
-            } else {
-              targetId = '#tex-wood';
-            }
+      // 1. Check if dial is visible
+      if (dial && dial.object3D.visible) {
+        let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
+        let angle = ((rotY % 360) + 360) % 360;
 
-            const assetEl = document.querySelector(targetId);
-            
-            if (assetEl && assetEl.texture) {
-              const activeTexture = assetEl.texture;
-              
-              // 3. Texture Settings: Make the grain smaller/repeating
-              activeTexture.wrapS = activeTexture.wrapT = THREE.RepeatWrapping;
-              activeTexture.repeat.set(2, 2); // Adjust these numbers if the grain is too big/small
+        // 2. Decide the file path
+        let texturePath;
+        if (angle >= 300 || angle < 60) {
+          texturePath = 'textures/plaster_diffuse.jpg';
+        } else if (angle >= 60 && angle < 180) {
+          texturePath = 'textures/metal_diffuse.jpg';
+        } else {
+          texturePath = 'textures/wood_diffuse.jpg';
+        }
 
-              targets.forEach(el => {
-                const mesh = el.getObject3D('mesh');
-                if (mesh) {
-                  mesh.traverse((node) => {
-                    if (node.isMesh) {
-                      // Apply texture and reset base color to white
-                      node.material.map = activeTexture;
-                      node.material.color.set('#FFFFFF');
-                      node.material.needsUpdate = true;
-                    }
+        // 3. Apply to all targets
+        targets.forEach(el => {
+          const mesh = el.getObject3D('mesh');
+          if (mesh) {
+            mesh.traverse((node) => {
+              if (node.isMesh) {
+                // Only update if the texture path actually changed
+                if (!node.userData.currentPath || node.userData.currentPath !== texturePath) {
+                  
+                  // Manually load the texture
+                  this.loader.load(texturePath, (texture) => {
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                    texture.repeat.set(2, 2); 
+                    
+                    node.material = new THREE.MeshStandardMaterial({
+                      map: texture,
+                      color: 0xffffff
+                    });
+                    
+                    node.userData.currentPath = texturePath;
+                    console.log("Applied texture: " + texturePath);
                   });
                 }
-              });
-            }
+              }
+            });
           }
-        }
-      });
-    </script>
-  </head>
+        });
+      }
+    }
+  });
+</script>
 
-  <body style="margin: 0px; overflow: hidden;">
-      <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7; trackingMethod: best; maxDetectionRate: 60;" texture-manager>
-      
-      <a-assets>
-        <img id="tex-wood" src="textures/wood_diffuse.jpg" crossorigin="anonymous">
-        <img id="tex-plaster" src="textures/plaster_diffuse.jpg" crossorigin="anonymous">
-        <img id="tex-metal" src="textures/metal_diffuse.jpg" crossorigin="anonymous">
-      </a-assets>
+<body style="margin: 0px; overflow: hidden;">
+  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" texture-manager>
+    
+    <a-assets>
+      <img id="tex-wood" src="textures/wood_diffuse.jpg" crossorigin="anonymous">
+      <img id="tex-plaster" src="textures/plaster_diffuse.jpg" crossorigin="anonymous">
+      <img id="tex-metal" src="textures/metal_diffuse.jpg" crossorigin="anonymous">
+    </a-assets>
 
-      <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.6;" position="1 4 2"></a-entity>
+    <a-entity light="type: ambient; intensity: 0.9;"></a-entity>
 
-      <a-marker type="pattern" url="pattern-connect.patt">
-        <a-entity id="stairModel" 
-          class="swappable" 
-          gltf-model="url(stair.glb)" 
-          scale="10 10 10" 
-          position="0 0 0"> 
-        </a-entity>
-        
-        <a-box id="testBox" class="swappable" position="1.5 0.5 0" scale="0.5 0.5 0.5"></a-box>
-      </a-marker>
+    <a-marker type="pattern" url="pattern-connect.patt">
+      <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="1 1 1" position="0 0 0"></a-entity>
+      <a-box id="testBox" class="swappable" position="1.5 0.5 0" scale="0.5 0.5 0.5"></a-box>
+    </a-marker>
 
-      <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
-        <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
-      </a-marker>
+    <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
+      <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
+    </a-marker>
 
-      <a-entity camera></a-entity>
-    </a-scene>
-  </body>
+    <a-entity camera></a-entity>
+  </a-scene>
+</body>
 </html>
