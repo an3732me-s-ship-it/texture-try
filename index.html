@@ -5,85 +5,95 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-  AFRAME.registerComponent('four-texture-proximity', {
-  init: function() {
-    this.loader = new THREE.TextureLoader();
-    this.dialPos = new THREE.Vector3();
-    this.stairPos = new THREE.Vector3();
-  },
+      AFRAME.registerComponent('master-proximity-switcher', {
+        init: function() {
+          this.loader = new THREE.TextureLoader();
+          this.dialPos = new THREE.Vector3();
+          this.stairPos = new THREE.Vector3();
+          console.log("System Ready: Proximity set to 15cm");
+        },
 
-  tick: function () {
-    const dialMarker = document.querySelector('#marker-dial');
-    const stairMarker = document.querySelector('#marker-stair');
-    const targets = document.querySelectorAll('.swappable');
+        tick: function () {
+          const dial = document.querySelector('#marker-dial');
+          const stairMarker = document.querySelector('#marker-stair');
+          const targets = document.querySelectorAll('.swappable');
 
-    if (dialMarker && dialMarker.object3D.visible && stairMarker && stairMarker.object3D.visible) {
-      
-      dialMarker.object3D.getWorldPosition(this.dialPos);
-      stairMarker.object3D.getWorldPosition(this.stairPos);
-      
-      const dist = this.dialPos.distanceTo(this.stairPos);
+          if (dial && dial.object3D.visible && stairMarker && stairMarker.object3D.visible) {
+            
+            // Get 3D positions
+            dial.object3D.getWorldPosition(this.dialPos);
+            stairMarker.object3D.getWorldPosition(this.stairPos);
+            
+            const dist = this.dialPos.distanceTo(this.stairPos);
 
-      // 0.06 is 6 centimeters. Very tight range!
-      if (dist < 0.06) {
-        var vector = new THREE.Vector3(0, 0, 1);
-        vector.applyQuaternion(dialMarker.object3D.quaternion);
-        let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-        angle = (angle + 360) % 360;
+            // 0.15 is 15cm. This is safe for 5cm markers. 
+            // If it's too far, change to 0.1 (10cm).
+            if (dist < 0.15) {
+              var vector = new THREE.Vector3(0, 0, 1);
+              vector.applyQuaternion(dial.object3D.quaternion);
+              let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+              angle = (angle + 360) % 360;
 
-        let path;
-        if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
-        else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
-        else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
-        else path = 'textures/brick_diffuse.jpg';
+              let path;
+              if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
+              else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
+              else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
+              else path = 'textures/brick_diffuse.jpg';
 
-        this.updateModels(targets, path, true);
-        return; 
-      }
-    }
-    // Default/Reset state
-    this.updateModels(targets, null, false);
-  },
-
-  updateModels: function(targets, path, isActive) {
-    targets.forEach(el => {
-      const mesh = el.getObject3D('mesh');
-      if (!mesh) return;
-
-      mesh.traverse((node) => {
-        if (node.isMesh) {
-          if (isActive) {
-            if (node.userData.currentPath !== path) {
-              this.loader.load(path, (texture) => {
-                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(4, 4);
-                
-                // CRITICAL: Don't create 'new' material, just update the existing one
-                node.material.map = texture;
-                node.material.color.set('#FFFFFF');
-                node.material.needsUpdate = true;
-                node.userData.currentPath = path;
-              });
-            }
-          } else {
-            // RESET: Remove map, keep the 'Nice' shading color
-            if (node.userData.currentPath !== 'neutral') {
-              node.material.map = null;
-              node.material.color.set('#FFFFFF'); 
-              node.material.needsUpdate = true;
-              node.userData.currentPath = 'neutral';
+              this.applyMaterial(targets, path, true);
+              return;
             }
           }
+          // Default: If markers missing or too far
+          this.applyMaterial(targets, null, false);
+        },
+
+        applyMaterial: function(targets, path, isActive) {
+          targets.forEach(el => {
+            const mesh = el.getObject3D('mesh');
+            if (!mesh) return;
+
+            mesh.traverse((node) => {
+              if (node.isMesh) {
+                if (isActive) {
+                  if (node.userData.currentPath !== path) {
+                    this.loader.load(path, (texture) => {
+                      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                      texture.repeat.set(4, 4);
+                      
+                      // WE RE-CREATE MATERIAL TO ENSURE TEXTURE SHOWS
+                      node.material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        color: '#FFFFFF',
+                        roughness: 0.5,
+                        metalness: path.includes('metal') ? 0.7 : 0.1
+                      });
+                      
+                      node.userData.currentPath = path;
+                      node.material.needsUpdate = true;
+                    });
+                  }
+                } else {
+                  // RESET TO BRIGHT WHITE
+                  if (node.userData.currentPath !== 'neutral') {
+                    node.material = new THREE.MeshStandardMaterial({
+                      color: '#FFFFFF',
+                      roughness: 0.3, // Slightly shiny so shadows look better
+                      metalness: 0.0
+                    });
+                    node.userData.currentPath = 'neutral';
+                  }
+                }
+              }
+            });
+          });
         }
       });
-    });
-  }
-});
-</script>
+    </script>
   </head>
 
   <body style="margin: 0px; overflow: hidden;">
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" four-texture-master>
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" master-proximity-switcher>
       
       <a-assets>
         <img id="tex-wood" src="textures/wood_diffuse.jpg" crossorigin="anonymous">
@@ -92,10 +102,10 @@
         <img id="tex-brick" src="textures/brick_diffuse.jpg" crossorigin="anonymous">
       </a-assets>
 
-      <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.9; position: 2 4 2;"></a-entity>
 
-      <a-marker type="pattern" url="pattern-connect.patt">
+      <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
         <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
       </a-marker>
 
