@@ -5,89 +5,86 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('four-texture-master', {
-        init: function() {
-          this.loader = new THREE.TextureLoader();
-          console.log("Four-Texture System Online: Plaster, Metal, Wood, Brick");
-        },
+  AFRAME.registerComponent('four-texture-proximity', {
+    init: function() {
+      this.loader = new THREE.TextureLoader();
+      // Vectors to store positions
+      this.dialPos = new THREE.Vector3();
+      this.stairPos = new THREE.Vector3();
+    },
 
-        tick: function () {
-          const dial = document.querySelector('#marker-dial');
-          const targets = document.querySelectorAll('.swappable');
+    tick: function () {
+      const dialMarker = document.querySelector('#marker-dial');
+      const stairMarker = document.querySelector('#marker-stair');
+      const targets = document.querySelectorAll('.swappable');
 
-          if (dial && dial.object3D.visible) {
-            // THE SMOOTH VECTOR MATH
-            var vector = new THREE.Vector3( 0, 0, 1 );
-            vector.applyQuaternion( dial.object3D.quaternion );
-            let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-            angle = (angle + 360) % 360;
+      // 1. If BOTH markers are visible, calculate distance
+      if (dialMarker && dialMarker.object3D.visible && stairMarker && stairMarker.object3D.visible) {
+        
+        dialMarker.object3D.getWorldPosition(this.dialPos);
+        stairMarker.object3D.getWorldPosition(this.stairPos);
+        
+        const dist = this.dialPos.distanceTo(this.stairPos);
 
-            // DIVIDING 360 INTO FOUR 90-DEGREE SLICES
-            let path;
-            if (angle >= 315 || angle < 45) {
-                path = 'textures/plaster_diffuse.jpg';
-            } else if (angle >= 45 && angle < 135) {
-                path = 'textures/metal_diffuse.jpg';
-            } else if (angle >= 135 && angle < 225) {
-                path = 'textures/wood_diffuse.jpg';
-            } else {
-                path = 'textures/brick_diffuse.jpg'; // The 4th quadrant
-            }
+        // 0.25 is about 25cm. Since markers are 5cm, this is a generous "near" range.
+        if (dist < 0.25) {
+          // --- WITHIN RANGE: APPLY TEXTURE ---
+          var vector = new THREE.Vector3(0, 0, 1);
+          vector.applyQuaternion(dialMarker.object3D.quaternion);
+          let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+          angle = (angle + 360) % 360;
 
-            this.updateModels(targets, path, true);
-          } else {
-            // RESET TO NEUTRAL WHITE
-            this.updateModels(targets, null, false);
-          }
-        },
+          let path;
+          if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
+          else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
+          else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
+          else path = 'textures/brick_diffuse.jpg';
 
-        updateModels: function(targets, path, isActive) {
-          targets.forEach(el => {
-            const meshObj = el.getObject3D('mesh');
-            if (meshObj) {
-              meshObj.traverse((node) => {
-                if (node.isMesh) {
-                  if (isActive) {
-                    if (node.userData.currentPath !== path) {
-                      this.loader.load(path, (texture) => {
-                        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        
-                        // Scale the texture. 
-                        // Bricks often need to be smaller (higher repeat) to look real.
-                        texture.repeat.set(4, 4); 
-                        
-                        node.material.map = texture;
-                        node.material.color.set('#FFFFFF');
-
-                        // PHYSICS TUNING
-                        if (path.includes('metal')) {
-                            node.material.roughness = 0.2;
-                            node.material.metalness = 0.8; // Shiny and reflective
-                        } else {
-                            node.material.roughness = 0.8; // Matte for Brick/Wood/Plaster
-                            node.material.metalness = 0.0;
-                        }
-
-                        node.material.needsUpdate = true;
-                        node.userData.currentPath = path;
-                        console.log("Swapped to: " + path);
-                      });
-                    }
-                  } else {
-                    if (node.userData.currentPath !== 'neutral') {
-                      node.material.map = null;
-                      node.material.color.set('#FFFFFF');
-                      node.material.needsUpdate = true;
-                      node.userData.currentPath = 'neutral';
-                    }
-                  }
-                }
-              });
-            }
-          });
+          this.updateModels(targets, path, true);
+          return; // Stop here so we don't trigger the "else" reset
         }
+      }
+
+      // 2. FALLBACK: If dial is hidden OR too far, go back to bright white
+      this.updateModels(targets, null, false);
+    },
+
+    updateModels: function(targets, path, isActive) {
+      targets.forEach(el => {
+        const mesh = el.getObject3D('mesh');
+        if (!mesh) return;
+
+        mesh.traverse((node) => {
+          if (node.isMesh) {
+            if (isActive) {
+              // APPLY TEXTURE
+              if (node.material.userData.currentPath !== path) {
+                this.loader.load(path, (texture) => {
+                  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                  texture.repeat.set(4, 4);
+                  node.material.map = texture;
+                  node.material.color.set('#FFFFFF'); // Keep it bright!
+                  node.material.roughness = 0.5;
+                  node.material.needsUpdate = true;
+                  node.material.userData.currentPath = path;
+                });
+              }
+            } else {
+              // RESET TO NEUTRAL (WHITE)
+              if (node.material.userData.currentPath !== 'neutral') {
+                node.material.map = null;
+                node.material.color.set('#FFFFFF'); // Force pure white
+                node.material.roughness = 0.4; // Shiny enough to catch shadows
+                node.material.needsUpdate = true;
+                node.material.userData.currentPath = 'neutral';
+              }
+            }
+          }
+        });
       });
-    </script>
+    }
+  });
+</script>
   </head>
 
   <body style="margin: 0px; overflow: hidden;">
