@@ -5,92 +5,62 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
- AFRAME.registerComponent('texture-manager', {
-  init: function() {
-    this.loader = new THREE.TextureLoader();
-    console.log("Proximity System Active for 5cm markers");
-  },
+  AFRAME.registerComponent('texture-manager', {
+    init: function() {
+      // Create a loader to handle the images manually
+      this.loader = new THREE.TextureLoader();
+      console.log("Texture Manager Ready");
+    },
 
-  tick: function () {
-    const dialMarker = document.querySelector('#marker-dial');
-    const connectMarker = document.querySelector('#marker-connect'); 
-    const targets = document.querySelectorAll('.swappable');
+    tick: function () {
+      const dial = document.querySelector('#marker-dial');
+      const targets = document.querySelectorAll('.swappable');
 
-    if (!dialMarker || !connectMarker) return;
+      // 1. Check if dial is visible
+      if (dial && dial.object3D.visible) {
+        let rotY = THREE.MathUtils.radToDeg(dial.object3D.rotation.y);
+        let angle = ((rotY % 360) + 360) % 360;
 
-    // 1. Calculate 3D distance
-    const dialPos = new THREE.Vector3();
-    const connectPos = new THREE.Vector3();
-    
-    dialMarker.object3D.getWorldPosition(dialPos);
-    connectMarker.object3D.getWorldPosition(connectPos);
-    
-    const distance = dialPos.distanceTo(connectPos);
+        // 2. Decide the file path
+        let texturePath;
+        if (angle >= 300 || angle < 60) {
+          texturePath = 'textures/plaster_diffuse.jpg';
+        } else if (angle >= 60 && angle < 180) {
+          texturePath = 'textures/metal_diffuse.jpg';
+        } else {
+          texturePath = 'textures/wood_diffuse.jpg';
+        }
 
-    // 2. Interaction Zone: 0.25 = 25cm. 
-    // Since your markers are 5cm, this is a "hand-width" away.
-    const interactionZone = 0.25; 
-
-    if (dialMarker.object3D.visible && distance < interactionZone) {
-      let rotY = THREE.MathUtils.radToDeg(dialMarker.object3D.rotation.y);
-      let angle = ((rotY % 360) + 360) % 360;
-
-      let path;
-      if (angle >= 300 || angle < 60) path = 'textures/plaster_diffuse.jpg';
-      else if (angle >= 60 && angle < 180) path = 'textures/metal_diffuse.jpg';
-      else path = 'textures/wood_diffuse.jpg';
-
-      this.applyTexture(targets, path);
-    } else {
-      this.resetToDefault(targets);
+        // 3. Apply to all targets
+        targets.forEach(el => {
+          const mesh = el.getObject3D('mesh');
+          if (mesh) {
+            mesh.traverse((node) => {
+              if (node.isMesh) {
+                // Only update if the texture path actually changed
+                if (!node.userData.currentPath || node.userData.currentPath !== texturePath) {
+                  
+                  // Manually load the texture
+                  this.loader.load(texturePath, (texture) => {
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                    texture.repeat.set(2, 2); 
+                    
+                    node.material = new THREE.MeshStandardMaterial({
+                      map: texture,
+                      color: 0xffffff
+                    });
+                    
+                    node.userData.currentPath = texturePath;
+                    console.log("Applied texture: " + texturePath);
+                  });
+                }
+              }
+            });
+          }
+        });
+      }
     }
-  },
-
-  applyTexture: function(targets, path) {
-    targets.forEach(el => {
-      const obj = el.getObject3D('mesh');
-      if (obj) {
-        obj.traverse(node => {
-          if (node.isMesh && node.userData.currentPath !== path) {
-            this.loader.load(path, (texture) => {
-              texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-              texture.repeat.set(4, 4); // Denser grain for small markers
-              
-              node.material = new THREE.MeshStandardMaterial({ 
-                map: texture, 
-                color: 0xffffff,
-                roughness: 0.6,
-                metalness: 0.2 
-              });
-              node.userData.currentPath = path;
-              node.userData.isDefault = false;
-            });
-          }
-        });
-      }
-    });
-  },
-
-  resetToDefault: function(targets) {
-    targets.forEach(el => {
-      const obj = el.getObject3D('mesh');
-      if (obj) {
-        obj.traverse(node => {
-          if (node.isMesh && !node.userData.isDefault) {
-            // Reverts to a nice "Architectural Grey"
-            node.material = new THREE.MeshStandardMaterial({ 
-              color: '#888888', 
-              roughness: 0.9,
-              map: null 
-            });
-            node.userData.currentPath = null;
-            node.userData.isDefault = true;
-          }
-        });
-      }
-    });
-  }
-});
+  });
 </script>
 
 <body style="margin: 0px; overflow: hidden;">
@@ -104,7 +74,7 @@
 
    <a-entity light="type: ambient; intensity: 0.5;"></a-entity>
       <a-entity light="type: directional; 
-                 intensity: 0.8; 
+                 intensity: 0.5; 
                  position: 1 4 2; 
                  castShadow: true;">
       </a-entity>
@@ -125,3 +95,4 @@
     <a-entity camera></a-entity>
   </a-scene>
 </body>
+
