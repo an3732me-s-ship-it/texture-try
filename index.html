@@ -5,82 +5,59 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('four-texture-master', {
+      AFRAME.registerComponent('proximity-color-switcher', {
         init: function() {
-          this.loader = new THREE.TextureLoader();
-          console.log("Four-Texture System Online: Plaster, Metal, Wood, Brick");
+          this.p1 = new THREE.Vector3();
+          this.p2 = new THREE.Vector3();
+          console.log("Color Proximity Engine Ready");
         },
 
         tick: function () {
-          const dial = document.querySelector('#marker-dial');
+          const mDial = document.querySelector('#marker-dial');
+          const mStair = document.querySelector('#marker-stair');
           const targets = document.querySelectorAll('.swappable');
 
-          if (dial && dial.object3D.visible) {
-            // THE SMOOTH VECTOR MATH
-            var vector = new THREE.Vector3( 0, 0, 1 );
-            vector.applyQuaternion( dial.object3D.quaternion );
-            let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-            angle = (angle + 360) % 360;
+          // If both markers are seen...
+          if (mDial && mStair && mDial.object3D.visible && mStair.object3D.visible) {
+            
+            // Sync the 3D math
+            mDial.object3D.updateMatrixWorld();
+            mStair.object3D.updateMatrixWorld();
+            mDial.object3D.getWorldPosition(this.p1);
+            mStair.object3D.getWorldPosition(this.p2);
+            
+            const distance = this.p1.distanceTo(this.p2);
 
-            // DIVIDING 360 INTO FOUR 90-DEGREE SLICES
-            let path;
-            if (angle >= 315 || angle < 45) {
-                path = 'textures/plaster_diffuse.jpg';
-            } else if (angle >= 45 && angle < 135) {
-                path = 'textures/metal_diffuse.jpg';
-            } else if (angle >= 135 && angle < 225) {
-                path = 'textures/wood_diffuse.jpg';
-            } else {
-                path = 'textures/brick_diffuse.jpg'; // The 4th quadrant
+            // Using 0.25 for a stable connection
+            if (distance < 0.25) {
+              var vector = new THREE.Vector3(0, 0, 1);
+              vector.applyQuaternion(mDial.object3D.quaternion);
+              let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+              angle = (angle + 360) % 360;
+
+              // Determine Color
+              let activeColor;
+              if (angle >= 315 || angle < 45) activeColor = '#FFFFFF'; // White
+              else if (angle >= 45 && angle < 135) activeColor = '#1976D2'; // Blue
+              else if (angle >= 135 && angle < 225) activeColor = '#FF00FF'; // Pink
+              else activeColor = '#444444'; // Grey
+
+              this.updateColors(targets, activeColor);
+              return;
             }
-
-            this.updateModels(targets, path, true);
-          } else {
-            // RESET TO NEUTRAL WHITE
-            this.updateModels(targets, null, false);
           }
+          // Default: If markers are apart, stay White
+          this.updateColors(targets, '#FFFFFF');
         },
 
-        updateModels: function(targets, path, isActive) {
+        updateColors: function(targets, color) {
           targets.forEach(el => {
-            const meshObj = el.getObject3D('mesh');
-            if (meshObj) {
-              meshObj.traverse((node) => {
+            const mesh = el.getObject3D('mesh');
+            if (mesh) {
+              mesh.traverse((node) => {
                 if (node.isMesh) {
-                  if (isActive) {
-                    if (node.userData.currentPath !== path) {
-                      this.loader.load(path, (texture) => {
-                        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        
-                        // Scale the texture. 
-                        // Bricks often need to be smaller (higher repeat) to look real.
-                        texture.repeat.set(4, 4); 
-                        
-                        node.material.map = texture;
-                        node.material.color.set('#FFFFFF');
-
-                        // PHYSICS TUNING
-                        if (path.includes('metal')) {
-                            node.material.roughness = 0.2;
-                            node.material.metalness = 0.8; // Shiny and reflective
-                        } else {
-                            node.material.roughness = 0.8; // Matte for Brick/Wood/Plaster
-                            node.material.metalness = 0.0;
-                        }
-
-                        node.material.needsUpdate = true;
-                        node.userData.currentPath = path;
-                        console.log("Swapped to: " + path);
-                      });
-                    }
-                  } else {
-                    if (node.userData.currentPath !== 'neutral') {
-                      node.material.map = null;
-                      node.material.color.set('#FFFFFF');
-                      node.material.needsUpdate = true;
-                      node.userData.currentPath = 'neutral';
-                    }
-                  }
+                  // We ONLY change the color, keeping the original material's shadows
+                  node.material.color.set(color);
                 }
               });
             }
@@ -91,29 +68,21 @@
   </head>
 
   <body style="margin: 0px; overflow: hidden;">
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" four-texture-master>
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" proximity-color-switcher>
       
-      <a-assets>
-        <img id="tex-wood" src="textures/wood_diffuse.jpg" crossorigin="anonymous">
-        <img id="tex-plaster" src="textures/plaster_diffuse.jpg" crossorigin="anonymous">
-        <img id="tex-metal" src="textures/metal_diffuse.jpg" crossorigin="anonymous">
-        <img id="tex-brick" src="textures/brick_diffuse.jpg" crossorigin="anonymous">
-      </a-assets>
+      <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.9; position: 1 4 2;"></a-entity>
 
-      <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
-
-      <a-marker type="pattern" url="pattern-connect.patt">
+      <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
         <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
       </a-marker>
 
-      <a-marker type="pattern" url="pattern-boundary.patt">
+      <a-marker id="marker-wall" type="pattern" url="pattern-boundary.patt">
         <a-entity id="wallModel" class="swappable" gltf-model="url(wall.glb)" scale="12 12 12"></a-entity>
       </a-marker>
 
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
-        <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
-        <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
+        <a-box position="0 0.1 0" scale="0.1 0.5 0.1" color="red"></a-box>
       </a-marker>
 
       <a-entity camera></a-entity>
