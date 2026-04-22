@@ -115,8 +115,11 @@
         <img id="tex-brick" src="textures/brick_diffuse.jpg" crossorigin="anonymous">
       </a-assets>
 
-      <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.8; position: 1 4 2;"></a-entity>
+      <a-entity light="type: ambient; intensity: 1.2;"></a-entity>
+      <a-entity light="type: directional; intensity: 1.2; position: 2 4 3;"></a-entity>
+      <a-entity 
+        light="type: hemisphere; color: #ffffff; groundColor: #444444; intensity: 0.6">
+      </a-entity>
 
       <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
         <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12" position="0 0 0"></a-entity>
