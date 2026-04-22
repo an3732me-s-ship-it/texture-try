@@ -32,6 +32,8 @@
             stairMarker.object3D.getWorldPosition(this.p2);
 
             const distance = this.p1.distanceTo(this.p2);
+            document.querySelector('#debugText')
+            .setAttribute('value', 'd: ' + distance.toFixed(2));
 
             // angle
             let vector = new THREE.Vector3(0, 0, 1);
@@ -49,7 +51,7 @@
             }
 
             // 🔥 TEMP LARGE THRESHOLD (to guarantee triggering)
-            if (distance < 0.6) {
+            if (distance < 1.0) {
               this.active = true;
 
               const mesh = stair.getObject3D('mesh');
@@ -98,7 +100,8 @@
       <!-- DEBUG TEXT -->
     <a-entity camera>
   <a-text 
-    value="HELLO DEBUG"
+    id="debugText"
+    value="HELLO"
     position="0 0 -1"
     color="red"
     align="center"
