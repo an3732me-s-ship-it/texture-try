@@ -51,7 +51,7 @@
             }
 
             // 🔥 TEMP LARGE THRESHOLD (to guarantee triggering)
-            if (distance < 1.0) {
+            if (distance < 3.5) {
               this.active = true;
 
               const mesh = stair.getObject3D('mesh');
@@ -101,11 +101,11 @@
     <a-entity camera>
   <a-text 
     id="debugText"
-    value="HELLO"
-    position="0 0 -1"
+    position="0 -0.3 -1"
     color="red"
     align="center"
-    width="3">
+    width="1"
+    wrap-count="20">
   </a-text>
 </a-entity>
 
