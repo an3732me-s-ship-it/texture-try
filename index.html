@@ -3,7 +3,6 @@
   <head>
     <meta charset="utf-8">
     <title>AR Proximity Texture Switcher</title>
-
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
@@ -11,131 +10,95 @@
       AFRAME.registerComponent('four-texture-proximity', {
         init: function() {
           this.loader = new THREE.TextureLoader();
+          // Reusable vectors for performance
           this.dialPos = new THREE.Vector3();
           this.targetPos = new THREE.Vector3();
-          console.log("Per-object proximity active");
+          console.log("Proximity System Active: 5cm Marker Calibration");
         },
 
         tick: function () {
           const dialMarker = document.querySelector('#marker-dial');
           const stairMarker = document.querySelector('#marker-stair');
-          const wallMarker = document.querySelector('#marker-wall');
+          const targets = document.querySelectorAll('.swappable');
 
-          const stairModel = document.querySelector('#stairModel');
-          const wallModel = document.querySelector('#wallModel');
-
-          // If dial not visible → reset everything
-          if (!dialMarker || !dialMarker.object3D.visible) {
-            this.updateModels([stairModel], null, false);
-            this.updateModels([wallModel], null, false);
-            return;
-          }
-
-          // --- ROTATION (UNCHANGED) ---
-          var vector = new THREE.Vector3(0, 0, 1);
-          vector.applyQuaternion(dialMarker.object3D.quaternion);
-          let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-          angle = (angle + 360) % 360;
-
-          let path;
-          if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
-          else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
-          else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
-          else path = 'textures/brick_diffuse.jpg';
-
-          const threshold = 0.35;
-
-          // --- STAIR ---
-          if (stairMarker && stairMarker.object3D.visible) {
+          // Ensure both markers are in the camera view to calculate distance
+          if (dialMarker && dialMarker.object3D.visible && stairMarker && stairMarker.object3D.visible) {
+            
+            // 1. Get World Positions
             dialMarker.object3D.getWorldPosition(this.dialPos);
             stairMarker.object3D.getWorldPosition(this.targetPos);
+            
+            // 2. Calculate Distance
+            const distance = this.dialPos.distanceTo(this.targetPos);
 
-            const d = this.dialPos.distanceTo(this.targetPos);
+            // 3. Proximity Threshold: 0.12 is approx 12cm. 
+            // Decrease to 0.08 if you want them to be almost touching.
+            const proximityThreshold = 3.5; 
 
-            if (d < threshold) {
-              this.updateModels([stairModel], path, true);
+            if (distance < proximityThreshold) {
+              // --- WITHIN RANGE: CALCULATE ROTATION ---
+              var vector = new THREE.Vector3(0, 0, 1);
+              vector.applyQuaternion(dialMarker.object3D.quaternion);
+              let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+              angle = (angle + 360) % 360;
+
+              let path;
+              if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
+              else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
+              else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
+              else path = 'textures/brick_diffuse.jpg';
+
+              this.updateModels(targets, path, true);
             } else {
-              this.updateModels([stairModel], null, false);
+              // --- TOO FAR: RESET TO WHITE ---
+              this.updateModels(targets, null, false);
             }
-          }
-
-          // --- WALL ---
-          if (wallMarker && wallMarker.object3D.visible) {
-            dialMarker.object3D.getWorldPosition(this.dialPos);
-            wallMarker.object3D.getWorldPosition(this.targetPos);
-
-            const d = this.dialPos.distanceTo(this.targetPos);
-
-            if (d < threshold) {
-              this.updateModels([wallModel], path, true);
-            } else {
-              this.updateModels([wallModel], null, false);
-            }
+          } else {
+            // --- MARKERS LOST: RESET TO WHITE ---
+            this.updateModels(targets, null, false);
           }
         },
 
         updateModels: function(targets, path, isActive) {
           targets.forEach(el => {
-            if (!el) return;
-
             const meshObj = el.getObject3D('mesh');
-            if (!meshObj) return;
-
-            meshObj.traverse((node) => {
-              if (!node.isMesh) return;
-
-              if (isActive) {
-                if (node.userData.currentPath !== path) {
-                  this.loader.load(path, (texture) => {
-                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                    texture.repeat.set(4, 4);
-
-                    // 🔥 handle BOTH single + multi material
-                    if (Array.isArray(node.material)) {
-                      node.material.forEach(mat => {
-                        mat.map = texture;
-                        mat.color.set('#FFFFFF');
-                        mat.roughness = path.includes('metal') ? 0.2 : 0.7;
-                        mat.metalness = path.includes('metal') ? 0.8 : 0.0;
-                        mat.side = THREE.DoubleSide;
-                        mat.needsUpdate = true;
+            if (meshObj) {
+              meshObj.traverse((node) => {
+                if (node.isMesh) {
+                  if (isActive) {
+                    // Update texture only if it has changed
+                    if (node.userData.currentPath !== path) {
+                      this.loader.load(path, (texture) => {
+                        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                        texture.repeat.set(4, 4); // Adjust for grain density
+                        
+                        node.material.map = texture;
+                        node.material.color.set('#FFFFFF');
+                        
+                        // Lighting properties
+                        node.material.roughness = path.includes('metal') ? 0.2 : 0.7;
+                        node.material.metalness = path.includes('metal') ? 0.8 : 0.0;
+                        node.material.side = THREE.DoubleSide;
+                        
+                        node.material.needsUpdate = true;
+                        node.userData.currentPath = path;
+                        console.log("Applied: " + path);
                       });
-                    } else {
-                      node.material.map = texture;
-                      node.material.color.set('#FFFFFF');
-                      node.material.roughness = path.includes('metal') ? 0.2 : 0.7;
-                      node.material.metalness = path.includes('metal') ? 0.8 : 0.0;
-                      node.material.side = THREE.DoubleSide;
-                      node.material.needsUpdate = true;
                     }
-
-                    node.userData.currentPath = path;
-                    console.log("Applied:", path);
-                  });
-                }
-              } else {
-                if (node.userData.currentPath !== 'neutral') {
-
-                  if (Array.isArray(node.material)) {
-                    node.material.forEach(mat => {
-                      mat.map = null;
-                      mat.color.set('#FFFFFF');
-                      mat.roughness = 0.9;
-                      mat.metalness = 0.0;
-                      mat.needsUpdate = true;
-                    });
                   } else {
-                    node.material.map = null;
-                    node.material.color.set('#FFFFFF');
-                    node.material.roughness = 0.9;
-                    node.material.metalness = 0.0;
-                    node.material.needsUpdate = true;
+                    // Reset to Neutral Architectural White
+                    if (node.userData.currentPath !== 'neutral') {
+                      node.material.map = null;
+                      node.material.color.set('#FFFFFF');
+                      node.material.roughness = 0.9;
+                      node.material.metalness = 0.0;
+                      node.material.needsUpdate = true;
+                      node.userData.currentPath = 'neutral';
+                    }
                   }
-
-                  node.userData.currentPath = 'neutral';
                 }
-              }
-            });
+              });
+            }
           });
         }
       });
@@ -146,26 +109,23 @@
     <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" four-texture-proximity>
       
       <a-assets>
-        <img src="textures/wood_diffuse.jpg">
-        <img src="textures/plaster_diffuse.jpg">
-        <img src="textures/metal_diffuse.jpg">
-        <img src="textures/brick_diffuse.jpg">
+        <img id="tex-wood" src="textures/wood_diffuse.jpg" crossorigin="anonymous">
+        <img id="tex-plaster" src="textures/plaster_diffuse.jpg" crossorigin="anonymous">
+        <img id="tex-metal" src="textures/metal_diffuse.jpg" crossorigin="anonymous">
+        <img id="tex-brick" src="textures/brick_diffuse.jpg" crossorigin="anonymous">
       </a-assets>
 
       <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8; position: 1 4 2;"></a-entity>
 
-      <!-- STAIR -->
       <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
-        <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
+        <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12" position="0 0 0"></a-entity>
       </a-marker>
 
-      <!-- WALL -->
       <a-marker id="marker-wall" type="pattern" url="pattern-boundary.patt">
-        <a-entity id="wallModel" class="swappable" gltf-model="url(wall.glb)" scale="12 12 12"></a-entity>
+        <a-entity id="wallModel" class="swappable" gltf-model="url(wall.glb)" scale="12 12 12" position="0 0 0"></a-entity>
       </a-marker>
 
-      <!-- DIAL -->
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
         <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
         <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
