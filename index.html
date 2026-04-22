@@ -5,107 +5,98 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      // Keep UI always visible
-      AFRAME.registerComponent('always-on-top', {
-        init: function () {
-          this.el.addEventListener('object3dset', () => {
-            const mesh = this.el.getObject3D('mesh');
-            if (!mesh) return;
-
-            mesh.traverse(node => {
-              if (node.isMesh) {
-                node.material.depthTest = false;
-                node.material.depthWrite = false;
-              }
-            });
-          });
-        }
-      });
-
-      AFRAME.registerComponent('proximity-dial-system', {
+      AFRAME.registerComponent('proximity-texture-switch', {
         init: function () {
           this.p1 = new THREE.Vector3();
           this.p2 = new THREE.Vector3();
           this.active = false;
-        },
 
-        setOpacity: function (mesh, opacity) {
-          mesh.traverse((node) => {
-            if (node.isMesh) {
-              node.material.transparent = true;
-              node.material.opacity = opacity;
-              node.material.depthWrite = false;
-            }
+          // ✅ preload textures ONCE
+          const loader = new THREE.TextureLoader();
+
+          this.textures = {
+            plaster: loader.load('textures/plaster_diffuse.jpg'),
+            metal: loader.load('textures/metal_diffuse.jpg'),
+            wood: loader.load('textures/wood_diffuse.jpg'),
+            brick: loader.load('textures/brick_diffuse.jpg')
+          };
+
+          // optional tiling
+          Object.values(this.textures).forEach(tex => {
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(2, 2);
           });
+
+          this.currentState = null;
         },
 
         tick: function () {
           const dial = document.querySelector('#marker-dial');
           const stairMarker = document.querySelector('#marker-stair');
           const stair = document.querySelector('#stairModel');
-          const debugText = document.querySelector('#debugText');
 
-          // default text
-          if (debugText) {
-            debugText.setAttribute('value', 'no markers');
-          }
+          if (
+            dial && stairMarker &&
+            dial.object3D.visible &&
+            stairMarker.object3D.visible &&
+            stair
+          ) {
+            dial.object3D.updateMatrixWorld();
+            stairMarker.object3D.updateMatrixWorld();
 
-          if (dial && stairMarker && stair) {
+            dial.object3D.getWorldPosition(this.p1);
+            stairMarker.object3D.getWorldPosition(this.p2);
 
-            if (dial.object3D.visible && stairMarker.object3D.visible) {
+            const distance = this.p1.distanceTo(this.p2);
 
-              dial.object3D.updateMatrixWorld();
-              stairMarker.object3D.updateMatrixWorld();
+            // ✅ correct range (your calibrated values)
+            if (distance < 3.3) {
+              this.active = true;
+            } else if (distance > 3.8) {
+              this.active = false;
+            }
 
-              dial.object3D.getWorldPosition(this.p1);
-              stairMarker.object3D.getWorldPosition(this.p2);
+            const mesh = stair.getObject3D('mesh');
+            if (!mesh) return;
 
-              const distance = this.p1.distanceTo(this.p2);
-
-              // ✅ always update text
-              if (debugText) {
-                debugText.setAttribute('value', distance.toFixed(2));
+            if (!this.active) {
+              // reset texture
+              if (this.currentState !== 'neutral') {
+                mesh.traverse(node => {
+                  if (node.isMesh) {
+                    node.material.map = null;
+                    node.material.needsUpdate = true;
+                  }
+                });
+                this.currentState = 'neutral';
               }
+              return;
+            }
 
-              // stable activation (based on your real range)
-              if (distance < 3.3) {
-                this.active = true;
-              } else if (distance > 3.8) {
-                this.active = false;
-              }
+            // 🔁 get dial angle
+            let vector = new THREE.Vector3(0, 0, 1);
+            vector.applyQuaternion(dial.object3D.quaternion);
 
-              const mesh = stair.getObject3D('mesh');
+            let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+            angle = (angle + 360) % 360;
 
-              if (mesh) {
-                // transparency
-                this.setOpacity(mesh, this.active ? 0.7 : 0.3);
+            // 🎯 choose texture
+            let state;
+            if (angle >= 315 || angle < 45) state = 'plaster';
+            else if (angle >= 45 && angle < 135) state = 'metal';
+            else if (angle >= 135 && angle < 225) state = 'wood';
+            else state = 'brick';
 
-                if (this.active) {
-                  // rotation → angle
-                  let vector = new THREE.Vector3(0, 0, 1);
-                  vector.applyQuaternion(dial.object3D.quaternion);
-
-                  let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-                  angle = (angle + 360) % 360;
-
-                  // 4-step color switching
-                  mesh.traverse((node) => {
-                    if (node.isMesh) {
-                      if (angle >= 315 || angle < 45) node.material.color.set('#FFFFFF');
-                      else if (angle >= 45 && angle < 135) node.material.color.set('#1976D2');
-                      else if (angle >= 135 && angle < 225) node.material.color.set('#FF00FF');
-                      else node.material.color.set('#444444');
-                    }
-                  });
-                } else {
-                  // reset color
-                  mesh.traverse((node) => {
-                    if (node.isMesh) {
-                      node.material.color.set('#FFFFFF');
-                    }
-                  });
+            // ✅ only update if changed
+            if (state !== this.currentState) {
+              mesh.traverse(node => {
+                if (node.isMesh) {
+                  node.material.map = this.textures[state];
+                  node.material.needsUpdate = true;
                 }
-              }
+              });
+
+              this.currentState = state;
             }
           }
         }
@@ -116,8 +107,8 @@
   <body style="margin: 0; overflow: hidden;">
     <a-scene
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;"
-      proximity-dial-system
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+      proximity-texture-switch
     >
 
       <!-- LIGHT -->
@@ -132,24 +123,9 @@
       <!-- DIAL -->
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
         <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
-        <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
       </a-marker>
 
-      <!-- CAMERA + SIMPLE NUMBER -->
-      <a-entity camera>
-
-        <a-text 
-          id="debugText"
-          position="0 0 -1"
-          color="white"
-          align="center"
-          width="1.5"
-          value="0.00"
-          always-on-top>
-        </a-text>
-
-      </a-entity>
-
+      <a-entity camera></a-entity>
     </a-scene>
   </body>
 </html>
