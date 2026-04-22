@@ -10,10 +10,24 @@
   <script>
     AFRAME.registerComponent('texture-proximity-switch', {
       init: function () {
-        this.loader = new THREE.TextureLoader();
         this.p1 = new THREE.Vector3();
         this.p2 = new THREE.Vector3();
-        console.log("✅ Proximity Texture System Ready");
+
+        // ✅ PRELOAD TEXTURES ONCE (NO loader in tick!)
+        this.textures = {
+          plaster: new THREE.TextureLoader().load('textures/plaster_diffuse.jpg'),
+          metal: new THREE.TextureLoader().load('textures/metal_diffuse.jpg'),
+          wood: new THREE.TextureLoader().load('textures/wood_diffuse.jpg'),
+          brick: new THREE.TextureLoader().load('textures/brick_diffuse.jpg')
+        };
+
+        // configure textures
+        Object.values(this.textures).forEach(tex => {
+          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(4, 4);
+        });
+
+        console.log("✅ Texture system ready");
       },
 
       tick: function () {
@@ -30,8 +44,7 @@
           stairMarker.object3D.getWorldPosition(this.p2);
           const distance = this.p1.distanceTo(this.p2);
 
-          // 🔥 GOOD RANGE FOR 5cm MARKERS
-          const threshold = 0.18;
+          const threshold = 0.18; // good for 5cm markers
 
           if (distance < threshold) {
 
@@ -42,17 +55,17 @@
             let angle = Math.atan2(dir.x, dir.z) * (180 / Math.PI);
             angle = (angle + 360) % 360;
 
-            let path;
+            let texture;
             if (angle >= 315 || angle < 45)
-              path = 'textures/plaster_diffuse.jpg';
+              texture = this.textures.plaster;
             else if (angle >= 45 && angle < 135)
-              path = 'textures/metal_diffuse.jpg';
+              texture = this.textures.metal;
             else if (angle >= 135 && angle < 225)
-              path = 'textures/wood_diffuse.jpg';
+              texture = this.textures.wood;
             else
-              path = 'textures/brick_diffuse.jpg';
+              texture = this.textures.brick;
 
-            this.applyTexture(targets, path);
+            this.applyTexture(targets, texture);
 
           } else {
             this.restoreOriginal(targets);
@@ -63,7 +76,7 @@
         }
       },
 
-      applyTexture: function (targets, path) {
+      applyTexture: function (targets, texture) {
         targets.forEach(el => {
           const mesh = el.getObject3D('mesh');
           if (!mesh) return;
@@ -71,32 +84,27 @@
           mesh.traverse(node => {
             if (!node.isMesh) return;
 
-            // 🔥 STORE ORIGINAL MATERIAL ONCE
+            // ✅ store original material once
             if (!node.userData.originalMaterial) {
               node.userData.originalMaterial = node.material.clone();
             }
 
-            if (node.userData.currentPath === path) return;
+            if (node.userData.currentTexture === texture) return;
 
-            this.loader.load(path, (texture) => {
-              texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-              texture.repeat.set(4, 4);
+            node.material.map = texture;
+            node.material.color.set('#FFFFFF');
 
-              node.material.map = texture;
-              node.material.color.set('#FFFFFF');
+            // keep good shading behavior
+            if (texture === this.textures.metal) {
+              node.material.roughness = 0.2;
+              node.material.metalness = 0.8;
+            } else {
+              node.material.roughness = 0.8;
+              node.material.metalness = 0.0;
+            }
 
-              // keep your good shading logic
-              if (path.includes('metal')) {
-                node.material.roughness = 0.2;
-                node.material.metalness = 0.8;
-              } else {
-                node.material.roughness = 0.8;
-                node.material.metalness = 0.0;
-              }
-
-              node.material.needsUpdate = true;
-              node.userData.currentPath = path;
-            });
+            node.material.needsUpdate = true;
+            node.userData.currentTexture = texture;
           });
         });
       },
@@ -111,7 +119,7 @@
 
             if (node.userData.originalMaterial) {
               node.material = node.userData.originalMaterial.clone();
-              node.userData.currentPath = 'original';
+              node.userData.currentTexture = null;
             }
           });
         });
@@ -128,7 +136,7 @@
   texture-proximity-switch
 >
 
-  <!-- LIGHTING (keep simple — your GLB already handles shading well) -->
+  <!-- LIGHT -->
   <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
   <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
 
