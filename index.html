@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
@@ -16,61 +17,50 @@
         },
 
         tick: function () {
-  const dialMarker = document.querySelector('#marker-dial');
-  const stairMarker = document.querySelector('#marker-stair');
-  const wallMarker = document.querySelector('#marker-wall');
+          const dialMarker = document.querySelector('#marker-dial');
+          const stairMarker = document.querySelector('#marker-stair');
+          const targets = document.querySelectorAll('.swappable');
 
-  const stairModel = document.querySelector('#stairModel');
-  const wallModel = document.querySelector('#wallModel');
+          // Ensure both markers are in the camera view to calculate distance
+          if (dialMarker && dialMarker.object3D.visible && stairMarker && stairMarker.object3D.visible) {
+            
+            // 1. Get World Positions
+            dialMarker.object3D.getWorldPosition(this.dialPos);
+            stairMarker.object3D.getWorldPosition(this.targetPos);
+            
+            // 2. Calculate Distance
+            const distance = this.dialPos.distanceTo(this.targetPos);
 
-  if (!dialMarker || !dialMarker.object3D.visible) return;
+            // 3. Proximity Threshold: 0.12 is approx 12cm. 
+            // Decrease to 0.08 if you want them to be almost touching.
+            const proximityThreshold = 3.5; 
 
-  // --- ROTATION (unchanged) ---
-  var vector = new THREE.Vector3(0, 0, 1);
-  vector.applyQuaternion(dialMarker.object3D.quaternion);
-  let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-  angle = (angle + 360) % 360;
+            if (distance < proximityThreshold) {
+              // --- WITHIN RANGE: CALCULATE ROTATION ---
+              var vector = new THREE.Vector3(0, 0, 1);
+              vector.applyQuaternion(dialMarker.object3D.quaternion);
+              let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+              angle = (angle + 360) % 360;
 
-  let path;
-  if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
-  else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
-  else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
-  else path = 'textures/brick_diffuse.jpg';
+              let path;
+              if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
+              else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
+              else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
+              else path = 'textures/brick_diffuse.jpg';
 
-  const threshold = 0.25;
-
-  // --- STAIR ---
-  if (stairMarker && stairMarker.object3D.visible) {
-    dialMarker.object3D.getWorldPosition(this.dialPos);
-    stairMarker.object3D.getWorldPosition(this.targetPos);
-
-    const distance = this.dialPos.distanceTo(this.targetPos);
-
-    if (distance < threshold) {
-      this.updateModels([stairModel], path, true);
-    } else {
-      this.updateModels([stairModel], null, false);
-    }
-  }
-
-  // --- WALL ---
-  if (wallMarker && wallMarker.object3D.visible) {
-    dialMarker.object3D.getWorldPosition(this.dialPos);
-    wallMarker.object3D.getWorldPosition(this.targetPos);
-
-    const distance = this.dialPos.distanceTo(this.targetPos);
-
-    if (distance < threshold) {
-      this.updateModels([wallModel], path, true);
-    } else {
-      this.updateModels([wallModel], null, false);
-    }
-  }
-}
+              this.updateModels(targets, path, true);
+            } else {
+              // --- TOO FAR: RESET TO WHITE ---
+              this.updateModels(targets, null, false);
+            }
+          } else {
+            // --- MARKERS LOST: RESET TO WHITE ---
+            this.updateModels(targets, null, false);
+          }
+        },
 
         updateModels: function(targets, path, isActive) {
           targets.forEach(el => {
-            if (!el) return;
             const meshObj = el.getObject3D('mesh');
             if (meshObj) {
               meshObj.traverse((node) => {
