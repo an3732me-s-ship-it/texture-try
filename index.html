@@ -5,7 +5,7 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      // 🔧 Keep UI always visible
+      // Keep UI always visible
       AFRAME.registerComponent('always-on-top', {
         init: function () {
           this.el.addEventListener('object3dset', () => {
@@ -44,7 +44,6 @@
           const stairMarker = document.querySelector('#marker-stair');
           const stair = document.querySelector('#stairModel');
           const debugText = document.querySelector('#debugText');
-          const bar = document.querySelector('#distanceBar');
 
           if (
             dial && stairMarker &&
@@ -60,29 +59,12 @@
 
             const distance = this.p1.distanceTo(this.p2);
 
-            // normalize distance (your observed range)
-            let t = (distance - 3.0) / (4.0 - 3.0);
-            t = Math.max(0, Math.min(1, t));
-
-            // update text
+            // 👇 ONLY NUMBER DISPLAY
             if (debugText) {
-              debugText.setAttribute('value', 'd: ' + distance.toFixed(2));
+              debugText.setAttribute('value', distance.toFixed(2));
             }
 
-            // update bar
-            if (bar) {
-              bar.setAttribute('width', 0.6 * (1 - t));
-
-              if (distance < 3.3) {
-                bar.setAttribute('color', '#00FF00');
-              } else if (distance < 3.6) {
-                bar.setAttribute('color', '#FFFF00');
-              } else {
-                bar.setAttribute('color', '#FF0000');
-              }
-            }
-
-            // stable activation (no flicker)
+            // stable activation
             if (distance < 3.3) {
               this.active = true;
             } else if (distance > 3.8) {
@@ -92,7 +74,6 @@
             const mesh = stair.getObject3D('mesh');
 
             if (mesh) {
-              // opacity feedback
               this.setOpacity(mesh, this.active ? 0.7 : 0.3);
 
               if (this.active) {
@@ -146,45 +127,17 @@
         <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
       </a-marker>
 
-      <!-- CAMERA + UI -->
+      <!-- CAMERA + SIMPLE UI -->
       <a-entity camera>
 
         <a-text 
           id="debugText"
-          position="0 -0.35 -1"
+          position="-0.6 0.4 -1"
           color="white"
-          align="center"
-          width="1.5"
+          align="left"
+          width="1"
           always-on-top>
         </a-text>
-
-        <a-text 
-          value="PROXIMITY"
-          position="0 -0.55 -1"
-          align="center"
-          width="1.2"
-          color="#AAAAAA"
-          always-on-top>
-        </a-text>
-
-        <a-plane 
-          position="0 -0.65 -1"
-          width="0.6"
-          height="0.05"
-          color="#333"
-          opacity="0.85"
-          always-on-top>
-        </a-plane>
-
-        <a-plane 
-          id="distanceBar"
-          position="-0.3 -0.65 -0.99"
-          width="0.01"
-          height="0.05"
-          color="#00FFAA"
-          opacity="0.9"
-          always-on-top>
-        </a-plane>
 
       </a-entity>
 
