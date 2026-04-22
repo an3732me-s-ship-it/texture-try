@@ -44,7 +44,7 @@
       const distance = this.dialPos.distanceTo(this.targetPos);
 
       // Distance threshold: 0.15 = 15cm
-      if (distance < 0.15) {
+      if (distance < 3.5) {
         this.updateIndividual(el, path, true);
       } else {
         this.updateIndividual(el, null, false);
