@@ -5,7 +5,7 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('four-color-proximity', {
+      AFRAME.registerComponent('four-color-proximity-debug', {
         init: function () {
           this.p1 = new THREE.Vector3();
           this.p2 = new THREE.Vector3();
@@ -16,6 +16,7 @@
           const dial = document.querySelector('#marker-dial');
           const stairMarker = document.querySelector('#marker-stair');
           const stair = document.querySelector('#stairModel');
+          const debugText = document.querySelector('#debugText');
 
           if (
             dial && stairMarker &&
@@ -23,7 +24,7 @@
             stairMarker.object3D.visible &&
             stair
           ) {
-            // 👉 get world positions
+            // positions
             dial.object3D.updateMatrixWorld();
             stairMarker.object3D.updateMatrixWorld();
 
@@ -32,16 +33,24 @@
 
             const distance = this.p1.distanceTo(this.p2);
 
-            // 👉 proximity condition (closer than before)
-            if (distance < 0.35) {
+            // angle
+            let vector = new THREE.Vector3(0, 0, 1);
+            vector.applyQuaternion(dial.object3D.quaternion);
+
+            let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+            angle = (angle + 360) % 360;
+
+            // 🔧 DEBUG DISPLAY
+            if (debugText) {
+              debugText.setAttribute(
+                'value',
+                `d: ${distance.toFixed(2)}\nangle: ${Math.round(angle)}\nactive: ${this.active}`
+              );
+            }
+
+            // 🔥 TEMP LARGE THRESHOLD (to guarantee triggering)
+            if (distance < 0.6) {
               this.active = true;
-
-              // ===== YOUR ORIGINAL WORKING LOGIC =====
-              var vector = new THREE.Vector3(0, 0, 1);
-              vector.applyQuaternion(dial.object3D.quaternion);
-
-              let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-              angle = (angle + 360) % 360;
 
               const mesh = stair.getObject3D('mesh');
               if (mesh) {
@@ -59,7 +68,7 @@
             }
           }
 
-          // 👉 reset when not close
+          // reset
           if (this.active) {
             const stair = document.querySelector('#stairModel');
             const mesh = stair?.getObject3D('mesh');
@@ -79,17 +88,32 @@
     </script>
   </head>
 
-  <body style="margin: 0px; overflow: hidden;">
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" four-color-proximity>
-      
+  <body style="margin: 0; overflow: hidden;">
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;"
+      four-color-proximity-debug
+    >
+
+      <!-- DEBUG TEXT -->
+      <a-text
+        id="debugText"
+        position="0 1 -1"
+        color="red"
+        align="center"
+        width="2">
+      </a-text>
+
+      <!-- lighting -->
       <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
       <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
 
-      <!-- 👇 IMPORTANT: give this marker an ID -->
+      <!-- stair marker -->
       <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
         <a-entity id="stairModel" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
       </a-marker>
 
+      <!-- dial marker -->
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
         <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
         <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
