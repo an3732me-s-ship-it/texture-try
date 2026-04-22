@@ -5,11 +5,34 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('proximity-color-switcher', {
-        init: function() {
+      AFRAME.registerComponent('final-proximity-switcher', {
+        init: function () {
           this.p1 = new THREE.Vector3();
           this.p2 = new THREE.Vector3();
-          console.log("Color Proximity Engine Ready");
+
+          // Preload textures from <a-assets>
+          this.textures = {
+            wood: new THREE.Texture(document.querySelector('#tex-wood')),
+            plaster: new THREE.Texture(document.querySelector('#tex-plaster')),
+            metal: new THREE.Texture(document.querySelector('#tex-metal')),
+            brick: new THREE.Texture(document.querySelector('#tex-brick'))
+          };
+
+          // Configure textures once
+          Object.values(this.textures).forEach(tex => {
+            tex.needsUpdate = true;
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 4);
+          });
+
+          this.currentKey = null;
+
+          // Ensure models are ready
+          document.querySelectorAll('.swappable').forEach(el => {
+            el.addEventListener('model-loaded', () => {
+              console.log(el.id + " loaded");
+            });
+          });
         },
 
         tick: function () {
@@ -17,72 +40,118 @@
           const mStair = document.querySelector('#marker-stair');
           const targets = document.querySelectorAll('.swappable');
 
-          // If both markers are seen...
-          if (mDial && mStair && mDial.object3D.visible && mStair.object3D.visible) {
-            
-            // Sync the 3D math
+          if (
+            mDial &&
+            mStair &&
+            mDial.object3D.visible &&
+            mStair.object3D.visible
+          ) {
             mDial.object3D.updateMatrixWorld();
             mStair.object3D.updateMatrixWorld();
             mDial.object3D.getWorldPosition(this.p1);
             mStair.object3D.getWorldPosition(this.p2);
-            
+
             const distance = this.p1.distanceTo(this.p2);
 
-            // Using 0.25 for a stable connection
             if (distance < 0.25) {
-              var vector = new THREE.Vector3(0, 0, 1);
+              let vector = new THREE.Vector3(0, 0, 1);
               vector.applyQuaternion(mDial.object3D.quaternion);
+
               let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
               angle = (angle + 360) % 360;
 
-              // Determine Color
-              let activeColor;
-              if (angle >= 315 || angle < 45) activeColor = '#FFFFFF'; // White
-              else if (angle >= 45 && angle < 135) activeColor = '#1976D2'; // Blue
-              else if (angle >= 135 && angle < 225) activeColor = '#FF00FF'; // Pink
-              else activeColor = '#444444'; // Grey
+              let key;
+              if (angle >= 315 || angle < 45) key = 'plaster';
+              else if (angle >= 45 && angle < 135) key = 'metal';
+              else if (angle >= 135 && angle < 225) key = 'wood';
+              else key = 'brick';
 
-              this.updateColors(targets, activeColor);
+              if (this.currentKey !== key) {
+                this.applyTexture(targets, key, true);
+                this.currentKey = key;
+              }
               return;
             }
           }
-          // Default: If markers are apart, stay White
-          this.updateColors(targets, '#FFFFFF');
+
+          // Reset if markers not close
+          if (this.currentKey !== 'neutral') {
+            this.applyTexture(targets, null, false);
+            this.currentKey = 'neutral';
+          }
         },
 
-        updateColors: function(targets, color) {
+        applyTexture: function (targets, key, isActive) {
           targets.forEach(el => {
             const mesh = el.getObject3D('mesh');
-            if (mesh) {
-              mesh.traverse((node) => {
-                if (node.isMesh) {
-                  // We ONLY change the color, keeping the original material's shadows
-                  node.material.color.set(color);
+            if (!mesh) return;
+
+            mesh.traverse(node => {
+              if (!node.isMesh) return;
+
+              // Ensure material exists
+              if (!node.material) {
+                node.material = new THREE.MeshStandardMaterial({ color: '#FFFFFF' });
+              }
+
+              if (isActive) {
+                if (node.userData.currentKey !== key) {
+                  node.material.map = this.textures[key];
+                  node.material.color.set('#FFFFFF');
+                  node.material.roughness = 0.6;
+                  node.material.needsUpdate = true;
+
+                  node.userData.currentKey = key;
                 }
-              });
-            }
+              } else {
+                if (node.userData.currentKey !== 'neutral') {
+                  node.material.map = null;
+                  node.material.color.set('#FFFFFF');
+                  node.material.roughness = 0.3;
+                  node.material.needsUpdate = true;
+
+                  node.userData.currentKey = 'neutral';
+                }
+              }
+            });
           });
         }
       });
     </script>
   </head>
 
-  <body style="margin: 0px; overflow: hidden;">
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" proximity-color-switcher>
-      
-      <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.9; position: 1 4 2;"></a-entity>
+  <body style="margin: 0; overflow: hidden;">
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;"
+      final-proximity-switcher
+    >
 
+      <!-- Preloaded textures -->
+      <a-assets>
+        <img id="tex-wood" src="textures/wood_diffuse.jpg">
+        <img id="tex-plaster" src="textures/plaster_diffuse.jpg">
+        <img id="tex-metal" src="textures/metal_diffuse.jpg">
+        <img id="tex-brick" src="textures/brick_diffuse.jpg">
+      </a-assets>
+
+      <!-- Lighting -->
+      <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8; position: 1 4 2;"></a-entity>
+
+      <!-- Target model -->
       <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
-        <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
+        <a-entity
+          id="stairModel"
+          class="swappable"
+          gltf-model="url(stair.glb)"
+          scale="12 12 12">
+        </a-entity>
       </a-marker>
 
-      <a-marker id="marker-wall" type="pattern" url="pattern-boundary.patt">
-        <a-entity id="wallModel" class="swappable" gltf-model="url(wall.glb)" scale="12 12 12"></a-entity>
-      </a-marker>
-
+      <!-- Dial marker -->
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
-        <a-box position="0 0.1 0" scale="0.1 0.5 0.1" color="red"></a-box>
+        <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
       </a-marker>
 
       <a-entity camera></a-entity>
