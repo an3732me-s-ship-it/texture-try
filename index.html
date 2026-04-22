@@ -96,13 +96,15 @@
     >
 
       <!-- DEBUG TEXT -->
-      <a-text
-        id="debugText"
-        position="0 1 -1"
-        color="red"
-        align="center"
-        width="2">
-      </a-text>
+    <a-entity camera>
+  <a-text 
+    id="debugText"
+    position="0 -0.5 -1"
+    color="red"
+    align="center"
+    width="2">
+  </a-text>
+</a-entity>
 
       <!-- lighting -->
       <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
@@ -119,7 +121,7 @@
         <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
       </a-marker>
 
-      <a-entity camera></a-entity>
+     
     </a-scene>
   </body>
 </html>
