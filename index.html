@@ -1,170 +1,177 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>AR Per-Object Proximity Texture</title>
+  <head>
+    <meta charset="utf-8">
+    <title>AR Proximity Texture Switcher</title>
 
-  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-  <script>
-    AFRAME.registerComponent('per-object-proximity', {
-      init: function() {
-        this.loader = new THREE.TextureLoader();
+    <script>
+      AFRAME.registerComponent('four-texture-proximity', {
+        init: function() {
+          this.loader = new THREE.TextureLoader();
+          this.dialPos = new THREE.Vector3();
+          this.targetPos = new THREE.Vector3();
+          console.log("Per-object proximity active");
+        },
 
-        this.dialPos = new THREE.Vector3();
-        this.stairPos = new THREE.Vector3();
-        this.wallPos = new THREE.Vector3();
+        tick: function () {
+          const dialMarker = document.querySelector('#marker-dial');
+          const stairMarker = document.querySelector('#marker-stair');
+          const wallMarker = document.querySelector('#marker-wall');
 
-        console.log("Per-object proximity system ready");
-      },
+          const stairModel = document.querySelector('#stairModel');
+          const wallModel = document.querySelector('#wallModel');
 
-      tick: function () {
-        const dial = document.querySelector('#marker-dial');
-        const stairMarker = document.querySelector('#marker-stair');
-        const wallMarker = document.querySelector('#marker-wall');
-
-        const stairModel = document.querySelector('#stairModel');
-        const wallModel = document.querySelector('#wallModel');
-
-        if (!dial || !dial.object3D.visible) {
-          this.resetModel(stairModel);
-          this.resetModel(wallModel);
-          return;
-        }
-
-        // --- GET DIAL POSITION ---
-        dial.object3D.getWorldPosition(this.dialPos);
-
-        // --- ROTATION (shared) ---
-        let dir = new THREE.Vector3(0, 0, 1);
-        dir.applyQuaternion(dial.object3D.quaternion);
-
-        let angle = Math.atan2(dir.x, dir.z) * (180 / Math.PI);
-        angle = (angle + 360) % 360;
-
-        let path;
-        if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
-        else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
-        else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
-        else path = 'textures/brick_diffuse.jpg';
-
-        const threshold = 0.2; // adjust if needed
-
-        // --- STAIR ---
-        if (stairMarker && stairMarker.object3D.visible) {
-          stairMarker.object3D.getWorldPosition(this.stairPos);
-          const d = this.dialPos.distanceTo(this.stairPos);
-
-          if (d < threshold) {
-            this.applyTexture(stairModel, path);
-          } else {
-            this.resetModel(stairModel);
+          // If dial not visible → reset everything
+          if (!dialMarker || !dialMarker.object3D.visible) {
+            this.updateModels([stairModel], null, false);
+            this.updateModels([wallModel], null, false);
+            return;
           }
-        }
 
-        // --- WALL ---
-        if (wallMarker && wallMarker.object3D.visible) {
-          wallMarker.object3D.getWorldPosition(this.wallPos);
-          const d = this.dialPos.distanceTo(this.wallPos);
+          // --- ROTATION (UNCHANGED) ---
+          var vector = new THREE.Vector3(0, 0, 1);
+          vector.applyQuaternion(dialMarker.object3D.quaternion);
+          let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+          angle = (angle + 360) % 360;
 
-          if (d < threshold) {
-            this.applyTexture(wallModel, path);
-          } else {
-            this.resetModel(wallModel);
-          }
-        }
-      },
+          let path;
+          if (angle >= 315 || angle < 45) path = 'textures/plaster_diffuse.jpg';
+          else if (angle >= 45 && angle < 135) path = 'textures/metal_diffuse.jpg';
+          else if (angle >= 135 && angle < 225) path = 'textures/wood_diffuse.jpg';
+          else path = 'textures/brick_diffuse.jpg';
 
-      applyTexture: function(model, path) {
-        if (!model) return;
+          const threshold = 0.35;
 
-        const mesh = model.getObject3D('mesh');
-        if (!mesh) return;
+          // --- STAIR ---
+          if (stairMarker && stairMarker.object3D.visible) {
+            dialMarker.object3D.getWorldPosition(this.dialPos);
+            stairMarker.object3D.getWorldPosition(this.targetPos);
 
-        mesh.traverse(node => {
-          if (!node.isMesh) return;
+            const d = this.dialPos.distanceTo(this.targetPos);
 
-          if (node.userData.currentPath === path) return;
-
-          this.loader.load(path, (texture) => {
-            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(4, 4);
-
-            if (Array.isArray(node.material)) {
-              node.material.forEach(mat => {
-                mat.map = texture;
-                mat.color.set('#FFFFFF');
-                mat.roughness = path.includes('metal') ? 0.2 : 0.7;
-                mat.metalness = path.includes('metal') ? 0.8 : 0.0;
-                mat.needsUpdate = true;
-              });
+            if (d < threshold) {
+              this.updateModels([stairModel], path, true);
             } else {
-              node.material.map = texture;
-              node.material.color.set('#FFFFFF');
-              node.material.roughness = path.includes('metal') ? 0.2 : 0.7;
-              node.material.metalness = path.includes('metal') ? 0.8 : 0.0;
-              node.material.needsUpdate = true;
+              this.updateModels([stairModel], null, false);
             }
-
-            node.userData.currentPath = path;
-          });
-        });
-      },
-
-      resetModel: function(model) {
-        if (!model) return;
-
-        const mesh = model.getObject3D('mesh');
-        if (!mesh) return;
-
-        mesh.traverse(node => {
-          if (!node.isMesh) return;
-
-          if (node.userData.currentPath === 'neutral') return;
-
-          if (Array.isArray(node.material)) {
-            node.material.forEach(mat => {
-              mat.map = null;
-              mat.color.set('#FFFFFF');
-              mat.needsUpdate = true;
-            });
-          } else {
-            node.material.map = null;
-            node.material.color.set('#FFFFFF');
-            node.material.needsUpdate = true;
           }
 
-          node.userData.currentPath = 'neutral';
-        });
-      }
-    });
-  </script>
-</head>
+          // --- WALL ---
+          if (wallMarker && wallMarker.object3D.visible) {
+            dialMarker.object3D.getWorldPosition(this.dialPos);
+            wallMarker.object3D.getWorldPosition(this.targetPos);
 
-<body style="margin: 0; overflow: hidden;">
-  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" per-object-proximity>
+            const d = this.dialPos.distanceTo(this.targetPos);
 
-    <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
-    <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
+            if (d < threshold) {
+              this.updateModels([wallModel], path, true);
+            } else {
+              this.updateModels([wallModel], null, false);
+            }
+          }
+        },
 
-    <!-- STAIR -->
-    <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
-      <a-entity id="stairModel" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
-    </a-marker>
+        updateModels: function(targets, path, isActive) {
+          targets.forEach(el => {
+            if (!el) return;
 
-    <!-- WALL -->
-    <a-marker id="marker-wall" type="pattern" url="pattern-boundary.patt">
-      <a-entity id="wallModel" gltf-model="url(wall.glb)" scale="12 12 12"></a-entity>
-    </a-marker>
+            const meshObj = el.getObject3D('mesh');
+            if (!meshObj) return;
 
-    <!-- DIAL -->
-    <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
-      <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
-    </a-marker>
+            meshObj.traverse((node) => {
+              if (!node.isMesh) return;
 
-    <a-entity camera></a-entity>
+              if (isActive) {
+                if (node.userData.currentPath !== path) {
+                  this.loader.load(path, (texture) => {
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                    texture.repeat.set(4, 4);
 
-  </a-scene>
-</body>
+                    // 🔥 handle BOTH single + multi material
+                    if (Array.isArray(node.material)) {
+                      node.material.forEach(mat => {
+                        mat.map = texture;
+                        mat.color.set('#FFFFFF');
+                        mat.roughness = path.includes('metal') ? 0.2 : 0.7;
+                        mat.metalness = path.includes('metal') ? 0.8 : 0.0;
+                        mat.side = THREE.DoubleSide;
+                        mat.needsUpdate = true;
+                      });
+                    } else {
+                      node.material.map = texture;
+                      node.material.color.set('#FFFFFF');
+                      node.material.roughness = path.includes('metal') ? 0.2 : 0.7;
+                      node.material.metalness = path.includes('metal') ? 0.8 : 0.0;
+                      node.material.side = THREE.DoubleSide;
+                      node.material.needsUpdate = true;
+                    }
+
+                    node.userData.currentPath = path;
+                    console.log("Applied:", path);
+                  });
+                }
+              } else {
+                if (node.userData.currentPath !== 'neutral') {
+
+                  if (Array.isArray(node.material)) {
+                    node.material.forEach(mat => {
+                      mat.map = null;
+                      mat.color.set('#FFFFFF');
+                      mat.roughness = 0.9;
+                      mat.metalness = 0.0;
+                      mat.needsUpdate = true;
+                    });
+                  } else {
+                    node.material.map = null;
+                    node.material.color.set('#FFFFFF');
+                    node.material.roughness = 0.9;
+                    node.material.metalness = 0.0;
+                    node.material.needsUpdate = true;
+                  }
+
+                  node.userData.currentPath = 'neutral';
+                }
+              }
+            });
+          });
+        }
+      });
+    </script>
+  </head>
+
+  <body style="margin: 0px; overflow: hidden;">
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" four-texture-proximity>
+      
+      <a-assets>
+        <img src="textures/wood_diffuse.jpg">
+        <img src="textures/plaster_diffuse.jpg">
+        <img src="textures/metal_diffuse.jpg">
+        <img src="textures/brick_diffuse.jpg">
+      </a-assets>
+
+      <a-entity light="type: ambient; intensity: 0.6;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
+
+      <!-- STAIR -->
+      <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
+        <a-entity id="stairModel" class="swappable" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
+      </a-marker>
+
+      <!-- WALL -->
+      <a-marker id="marker-wall" type="pattern" url="pattern-boundary.patt">
+        <a-entity id="wallModel" class="swappable" gltf-model="url(wall.glb)" scale="12 12 12"></a-entity>
+      </a-marker>
+
+      <!-- DIAL -->
+      <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
+        <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
+        <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
+      </a-marker>
+
+      <a-entity camera></a-entity>
+    </a-scene>
+  </body>
 </html>
