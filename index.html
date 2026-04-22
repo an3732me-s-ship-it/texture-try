@@ -5,11 +5,21 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('four-color-proximity-debug', {
+      AFRAME.registerComponent('proximity-dial-system', {
         init: function () {
           this.p1 = new THREE.Vector3();
           this.p2 = new THREE.Vector3();
           this.active = false;
+        },
+
+        setOpacity: function (mesh, opacity) {
+          mesh.traverse((node) => {
+            if (node.isMesh) {
+              node.material.transparent = true;
+              node.material.opacity = opacity;
+              node.material.depthWrite = false;
+            }
+          });
         },
 
         tick: function () {
@@ -17,6 +27,7 @@
           const stairMarker = document.querySelector('#marker-stair');
           const stair = document.querySelector('#stairModel');
           const debugText = document.querySelector('#debugText');
+          const bar = document.querySelector('#distanceBar');
 
           if (
             dial && stairMarker &&
@@ -24,7 +35,7 @@
             stairMarker.object3D.visible &&
             stair
           ) {
-            // positions
+            // update positions
             dial.object3D.updateMatrixWorld();
             stairMarker.object3D.updateMatrixWorld();
 
@@ -32,30 +43,51 @@
             stairMarker.object3D.getWorldPosition(this.p2);
 
             const distance = this.p1.distanceTo(this.p2);
-            document.querySelector('#debugText')
-            .setAttribute('value', 'd: ' + distance.toFixed(2));
 
-            // angle
-            let vector = new THREE.Vector3(0, 0, 1);
-            vector.applyQuaternion(dial.object3D.quaternion);
+            // normalize distance (based on your observed range)
+            let t = (distance - 3.0) / (4.0 - 3.0);
+            t = Math.max(0, Math.min(1, t));
 
-            let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-            angle = (angle + 360) % 360;
-
-            // 🔧 DEBUG DISPLAY
+            // update debug text
             if (debugText) {
-              debugText.setAttribute(
-                'value',
-                `d: ${distance.toFixed(2)}\nangle: ${Math.round(angle)}\nactive: ${this.active}`
-              );
+              debugText.setAttribute('value', 'd: ' + distance.toFixed(2));
             }
 
-            // 🔥 TEMP LARGE THRESHOLD (to guarantee triggering)
-            if (distance < 3.5) {
-              this.active = true;
+            // update distance bar
+            if (bar) {
+              bar.setAttribute('width', 0.6 * (1 - t));
 
-              const mesh = stair.getObject3D('mesh');
-              if (mesh) {
+              if (distance < 3.3) {
+                bar.setAttribute('color', '#00FF00'); // green
+              } else if (distance < 3.6) {
+                bar.setAttribute('color', '#FFFF00'); // yellow
+              } else {
+                bar.setAttribute('color', '#FF0000'); // red
+              }
+            }
+
+            // hysteresis (stable activation)
+            if (distance < 3.3) {
+              this.active = true;
+            } else if (distance > 3.8) {
+              this.active = false;
+            }
+
+            const mesh = stair.getObject3D('mesh');
+
+            if (mesh) {
+              // opacity depending on state
+              this.setOpacity(mesh, this.active ? 0.7 : 0.3);
+
+              if (this.active) {
+                // rotation → angle
+                let vector = new THREE.Vector3(0, 0, 1);
+                vector.applyQuaternion(dial.object3D.quaternion);
+
+                let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+                angle = (angle + 360) % 360;
+
+                // apply 4-step color
                 mesh.traverse((node) => {
                   if (node.isMesh) {
                     if (angle >= 315 || angle < 45) node.material.color.set('#FFFFFF');
@@ -64,26 +96,15 @@
                     else node.material.color.set('#444444');
                   }
                 });
+              } else {
+                // reset color when inactive
+                mesh.traverse((node) => {
+                  if (node.isMesh) {
+                    node.material.color.set('#FFFFFF');
+                  }
+                });
               }
-
-              return;
             }
-          }
-
-          // reset
-          if (this.active) {
-            const stair = document.querySelector('#stairModel');
-            const mesh = stair?.getObject3D('mesh');
-
-            if (mesh) {
-              mesh.traverse((node) => {
-                if (node.isMesh) {
-                  node.material.color.set('#FFFFFF');
-                }
-              });
-            }
-
-            this.active = false;
           }
         }
       });
@@ -94,37 +115,68 @@
     <a-scene
       embedded
       arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;"
-      four-color-proximity-debug
+      proximity-dial-system
     >
 
-      <!-- DEBUG TEXT -->
-    <a-entity camera>
-  <a-text 
-    id="debugText"
-    position="0 -0.3 -1"
-    color="red"
-    align="center"
-    width="1"
-    wrap-count="20">
-  </a-text>
-</a-entity>
-
-      <!-- lighting -->
+      <!-- LIGHTING -->
       <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
       <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
 
-      <!-- stair marker -->
+      <!-- STAIR MARKER -->
       <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
-        <a-entity id="stairModel" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
+        <a-entity 
+          id="stairModel" 
+          gltf-model="url(stair.glb)" 
+          scale="12 12 12">
+        </a-entity>
       </a-marker>
 
-      <!-- dial marker -->
+      <!-- DIAL MARKER -->
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
         <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
         <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
       </a-marker>
 
-     
+      <!-- CAMERA + UI -->
+      <a-entity camera>
+
+        <!-- distance text -->
+        <a-text 
+          id="debugText"
+          position="0 -0.35 -1"
+          color="white"
+          align="center"
+          width="1.5">
+        </a-text>
+
+        <!-- label -->
+        <a-text 
+          value="PROXIMITY"
+          position="0 -0.55 -1"
+          align="center"
+          width="1.2"
+          color="#AAAAAA">
+        </a-text>
+
+        <!-- bar background -->
+        <a-plane 
+          position="0 -0.65 -1"
+          width="0.6"
+          height="0.05"
+          color="#333">
+        </a-plane>
+
+        <!-- bar fill -->
+        <a-plane 
+          id="distanceBar"
+          position="-0.3 -0.65 -0.99"
+          width="0.01"
+          height="0.05"
+          color="#00FFAA">
+        </a-plane>
+
+      </a-entity>
+
     </a-scene>
   </body>
 </html>
