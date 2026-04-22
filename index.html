@@ -10,24 +10,24 @@
           this.p1 = new THREE.Vector3();
           this.p2 = new THREE.Vector3();
 
-          // Preload textures from <a-assets>
+          // Load textures ONCE
+          this.loader = new THREE.TextureLoader();
           this.textures = {
-            wood: new THREE.Texture(document.querySelector('#tex-wood')),
-            plaster: new THREE.Texture(document.querySelector('#tex-plaster')),
-            metal: new THREE.Texture(document.querySelector('#tex-metal')),
-            brick: new THREE.Texture(document.querySelector('#tex-brick'))
+            plaster: this.loader.load('textures/plaster_diffuse.jpg'),
+            metal: this.loader.load('textures/metal_diffuse.jpg'),
+            wood: this.loader.load('textures/wood_diffuse.jpg'),
+            brick: this.loader.load('textures/brick_diffuse.jpg')
           };
 
-          // Configure textures once
+          // Configure textures
           Object.values(this.textures).forEach(tex => {
-            tex.needsUpdate = true;
             tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            tex.repeat.set(4, 4);
+            tex.repeat.set(2, 2); // safer default for GLTF UVs
           });
 
-          this.currentKey = null;
+          this.currentKey = 'neutral';
 
-          // Ensure models are ready
+          // Ensure models are loaded
           document.querySelectorAll('.swappable').forEach(el => {
             el.addEventListener('model-loaded', () => {
               console.log(el.id + " loaded");
@@ -48,12 +48,14 @@
           ) {
             mDial.object3D.updateMatrixWorld();
             mStair.object3D.updateMatrixWorld();
+
             mDial.object3D.getWorldPosition(this.p1);
             mStair.object3D.getWorldPosition(this.p2);
 
             const distance = this.p1.distanceTo(this.p2);
 
-            if (distance < 0.25) {
+            // 🔧 tighter activation distance
+            if (distance < 0.15) {
               let vector = new THREE.Vector3(0, 0, 1);
               vector.applyQuaternion(mDial.object3D.quaternion);
 
@@ -67,21 +69,23 @@
               else key = 'brick';
 
               if (this.currentKey !== key) {
-                this.applyTexture(targets, key, true);
+                this.applyTexture(targets, key);
                 this.currentKey = key;
+                console.log("Switched to:", key);
               }
               return;
             }
           }
 
-          // Reset if markers not close
+          // Reset when not active
           if (this.currentKey !== 'neutral') {
-            this.applyTexture(targets, null, false);
+            this.resetMaterial(targets);
             this.currentKey = 'neutral';
+            console.log("Reset to neutral");
           }
         },
 
-        applyTexture: function (targets, key, isActive) {
+        applyTexture: function (targets, key) {
           targets.forEach(el => {
             const mesh = el.getObject3D('mesh');
             if (!mesh) return;
@@ -89,30 +93,27 @@
             mesh.traverse(node => {
               if (!node.isMesh) return;
 
-              // Ensure material exists
-              if (!node.material) {
-                node.material = new THREE.MeshStandardMaterial({ color: '#FFFFFF' });
-              }
+              // Keep original material, only swap texture
+              node.material.map = this.textures[key];
+              node.material.needsUpdate = true;
 
-              if (isActive) {
-                if (node.userData.currentKey !== key) {
-                  node.material.map = this.textures[key];
-                  node.material.color.set('#FFFFFF');
-                  node.material.roughness = 0.6;
-                  node.material.needsUpdate = true;
+              // Optional tuning for better look
+              node.material.roughness = 0.6;
+              node.material.metalness = 0.1;
+            });
+          });
+        },
 
-                  node.userData.currentKey = key;
-                }
-              } else {
-                if (node.userData.currentKey !== 'neutral') {
-                  node.material.map = null;
-                  node.material.color.set('#FFFFFF');
-                  node.material.roughness = 0.3;
-                  node.material.needsUpdate = true;
+        resetMaterial: function (targets) {
+          targets.forEach(el => {
+            const mesh = el.getObject3D('mesh');
+            if (!mesh) return;
 
-                  node.userData.currentKey = 'neutral';
-                }
-              }
+            mesh.traverse(node => {
+              if (!node.isMesh) return;
+
+              node.material.map = null;
+              node.material.needsUpdate = true;
             });
           });
         }
@@ -127,17 +128,9 @@
       final-proximity-switcher
     >
 
-      <!-- Preloaded textures -->
-      <a-assets>
-        <img id="tex-wood" src="textures/wood_diffuse.jpg">
-        <img id="tex-plaster" src="textures/plaster_diffuse.jpg">
-        <img id="tex-metal" src="textures/metal_diffuse.jpg">
-        <img id="tex-brick" src="textures/brick_diffuse.jpg">
-      </a-assets>
-
       <!-- Lighting -->
-      <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
-      <a-entity light="type: directional; intensity: 0.8; position: 1 4 2;"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
+      <a-entity light="type: directional; intensity: 1.0; position: 1 4 2;"></a-entity>
 
       <!-- Target model -->
       <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
