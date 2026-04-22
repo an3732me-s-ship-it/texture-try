@@ -5,146 +5,94 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <script>
-      AFRAME.registerComponent('final-proximity-switcher', {
+      AFRAME.registerComponent('four-color-proximity', {
         init: function () {
           this.p1 = new THREE.Vector3();
           this.p2 = new THREE.Vector3();
-
-          // Load textures ONCE
-          this.loader = new THREE.TextureLoader();
-          this.textures = {
-            plaster: this.loader.load('textures/plaster_diffuse.jpg'),
-            metal: this.loader.load('textures/metal_diffuse.jpg'),
-            wood: this.loader.load('textures/wood_diffuse.jpg'),
-            brick: this.loader.load('textures/brick_diffuse.jpg')
-          };
-
-          // Configure textures
-          Object.values(this.textures).forEach(tex => {
-            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            tex.repeat.set(2, 2); // safer default for GLTF UVs
-          });
-
-          this.currentKey = 'neutral';
-
-          // Ensure models are loaded
-          document.querySelectorAll('.swappable').forEach(el => {
-            el.addEventListener('model-loaded', () => {
-              console.log(el.id + " loaded");
-            });
-          });
+          this.active = false;
         },
 
         tick: function () {
-          const mDial = document.querySelector('#marker-dial');
-          const mStair = document.querySelector('#marker-stair');
-          const targets = document.querySelectorAll('.swappable');
+          const dial = document.querySelector('#marker-dial');
+          const stairMarker = document.querySelector('#marker-stair');
+          const stair = document.querySelector('#stairModel');
 
           if (
-            mDial &&
-            mStair &&
-            mDial.object3D.visible &&
-            mStair.object3D.visible
+            dial && stairMarker &&
+            dial.object3D.visible &&
+            stairMarker.object3D.visible &&
+            stair
           ) {
-            mDial.object3D.updateMatrixWorld();
-            mStair.object3D.updateMatrixWorld();
+            // 👉 get world positions
+            dial.object3D.updateMatrixWorld();
+            stairMarker.object3D.updateMatrixWorld();
 
-            mDial.object3D.getWorldPosition(this.p1);
-            mStair.object3D.getWorldPosition(this.p2);
+            dial.object3D.getWorldPosition(this.p1);
+            stairMarker.object3D.getWorldPosition(this.p2);
 
             const distance = this.p1.distanceTo(this.p2);
 
-            // 🔧 tighter activation distance
+            // 👉 proximity condition (closer than before)
             if (distance < 0.15) {
-              let vector = new THREE.Vector3(0, 0, 1);
-              vector.applyQuaternion(mDial.object3D.quaternion);
+              this.active = true;
+
+              // ===== YOUR ORIGINAL WORKING LOGIC =====
+              var vector = new THREE.Vector3(0, 0, 1);
+              vector.applyQuaternion(dial.object3D.quaternion);
 
               let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
               angle = (angle + 360) % 360;
 
-              let key;
-              if (angle >= 315 || angle < 45) key = 'plaster';
-              else if (angle >= 45 && angle < 135) key = 'metal';
-              else if (angle >= 135 && angle < 225) key = 'wood';
-              else key = 'brick';
-
-              if (this.currentKey !== key) {
-                this.applyTexture(targets, key);
-                this.currentKey = key;
-                console.log("Switched to:", key);
+              const mesh = stair.getObject3D('mesh');
+              if (mesh) {
+                mesh.traverse((node) => {
+                  if (node.isMesh) {
+                    if (angle >= 315 || angle < 45) node.material.color.set('#FFFFFF');
+                    else if (angle >= 45 && angle < 135) node.material.color.set('#1976D2');
+                    else if (angle >= 135 && angle < 225) node.material.color.set('#FF00FF');
+                    else node.material.color.set('#444444');
+                  }
+                });
               }
+
               return;
             }
           }
 
-          // Reset when not active
-          if (this.currentKey !== 'neutral') {
-            this.resetMaterial(targets);
-            this.currentKey = 'neutral';
-            console.log("Reset to neutral");
+          // 👉 reset when not close
+          if (this.active) {
+            const stair = document.querySelector('#stairModel');
+            const mesh = stair?.getObject3D('mesh');
+
+            if (mesh) {
+              mesh.traverse((node) => {
+                if (node.isMesh) {
+                  node.material.color.set('#FFFFFF');
+                }
+              });
+            }
+
+            this.active = false;
           }
-        },
-
-        applyTexture: function (targets, key) {
-          targets.forEach(el => {
-            const mesh = el.getObject3D('mesh');
-            if (!mesh) return;
-
-            mesh.traverse(node => {
-              if (!node.isMesh) return;
-
-              // Keep original material, only swap texture
-              node.material.map = this.textures[key];
-              node.material.needsUpdate = true;
-
-              // Optional tuning for better look
-              node.material.roughness = 0.6;
-              node.material.metalness = 0.1;
-            });
-          });
-        },
-
-        resetMaterial: function (targets) {
-          targets.forEach(el => {
-            const mesh = el.getObject3D('mesh');
-            if (!mesh) return;
-
-            mesh.traverse(node => {
-              if (!node.isMesh) return;
-
-              node.material.map = null;
-              node.material.needsUpdate = true;
-            });
-          });
         }
       });
     </script>
   </head>
 
-  <body style="margin: 0; overflow: hidden;">
-    <a-scene
-      embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;"
-      final-proximity-switcher
-    >
+  <body style="margin: 0px; overflow: hidden;">
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; patternRatio: 0.7;" four-color-proximity>
+      
+      <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8;" position="1 4 2"></a-entity>
 
-      <!-- Lighting -->
-      <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
-      <a-entity light="type: directional; intensity: 1.0; position: 1 4 2;"></a-entity>
-
-      <!-- Target model -->
+      <!-- 👇 IMPORTANT: give this marker an ID -->
       <a-marker id="marker-stair" type="pattern" url="pattern-connect.patt">
-        <a-entity
-          id="stairModel"
-          class="swappable"
-          gltf-model="url(stair.glb)"
-          scale="12 12 12">
-        </a-entity>
+        <a-entity id="stairModel" gltf-model="url(stair.glb)" scale="12 12 12"></a-entity>
       </a-marker>
 
-      <!-- Dial marker -->
       <a-marker id="marker-dial" type="pattern" url="pattern-texture.patt">
         <a-box position="0 0 -0.5" scale="0.1 0.1 0.5" color="red"></a-box>
+        <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
       </a-marker>
 
       <a-entity camera></a-entity>
