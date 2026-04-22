@@ -45,58 +45,66 @@
           const stair = document.querySelector('#stairModel');
           const debugText = document.querySelector('#debugText');
 
-          if (
-            dial && stairMarker &&
-            dial.object3D.visible &&
-            stairMarker.object3D.visible &&
-            stair
-          ) {
-            dial.object3D.updateMatrixWorld();
-            stairMarker.object3D.updateMatrixWorld();
+          // default text
+          if (debugText) {
+            debugText.setAttribute('value', 'no markers');
+          }
 
-            dial.object3D.getWorldPosition(this.p1);
-            stairMarker.object3D.getWorldPosition(this.p2);
+          if (dial && stairMarker && stair) {
 
-            const distance = this.p1.distanceTo(this.p2);
+            if (dial.object3D.visible && stairMarker.object3D.visible) {
 
-            // 👇 ONLY NUMBER DISPLAY
-            if (debugText) {
-              debugText.setAttribute('value', distance.toFixed(2));
-            }
+              dial.object3D.updateMatrixWorld();
+              stairMarker.object3D.updateMatrixWorld();
 
-            // stable activation
-            if (distance < 3.3) {
-              this.active = true;
-            } else if (distance > 3.8) {
-              this.active = false;
-            }
+              dial.object3D.getWorldPosition(this.p1);
+              stairMarker.object3D.getWorldPosition(this.p2);
 
-            const mesh = stair.getObject3D('mesh');
+              const distance = this.p1.distanceTo(this.p2);
 
-            if (mesh) {
-              this.setOpacity(mesh, this.active ? 0.7 : 0.3);
+              // ✅ always update text
+              if (debugText) {
+                debugText.setAttribute('value', distance.toFixed(2));
+              }
 
-              if (this.active) {
-                let vector = new THREE.Vector3(0, 0, 1);
-                vector.applyQuaternion(dial.object3D.quaternion);
+              // stable activation (based on your real range)
+              if (distance < 3.3) {
+                this.active = true;
+              } else if (distance > 3.8) {
+                this.active = false;
+              }
 
-                let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
-                angle = (angle + 360) % 360;
+              const mesh = stair.getObject3D('mesh');
 
-                mesh.traverse((node) => {
-                  if (node.isMesh) {
-                    if (angle >= 315 || angle < 45) node.material.color.set('#FFFFFF');
-                    else if (angle >= 45 && angle < 135) node.material.color.set('#1976D2');
-                    else if (angle >= 135 && angle < 225) node.material.color.set('#FF00FF');
-                    else node.material.color.set('#444444');
-                  }
-                });
-              } else {
-                mesh.traverse((node) => {
-                  if (node.isMesh) {
-                    node.material.color.set('#FFFFFF');
-                  }
-                });
+              if (mesh) {
+                // transparency
+                this.setOpacity(mesh, this.active ? 0.7 : 0.3);
+
+                if (this.active) {
+                  // rotation → angle
+                  let vector = new THREE.Vector3(0, 0, 1);
+                  vector.applyQuaternion(dial.object3D.quaternion);
+
+                  let angle = Math.atan2(vector.x, vector.z) * (180 / Math.PI);
+                  angle = (angle + 360) % 360;
+
+                  // 4-step color switching
+                  mesh.traverse((node) => {
+                    if (node.isMesh) {
+                      if (angle >= 315 || angle < 45) node.material.color.set('#FFFFFF');
+                      else if (angle >= 45 && angle < 135) node.material.color.set('#1976D2');
+                      else if (angle >= 135 && angle < 225) node.material.color.set('#FF00FF');
+                      else node.material.color.set('#444444');
+                    }
+                  });
+                } else {
+                  // reset color
+                  mesh.traverse((node) => {
+                    if (node.isMesh) {
+                      node.material.color.set('#FFFFFF');
+                    }
+                  });
+                }
               }
             }
           }
@@ -127,15 +135,16 @@
         <a-circle rotation="-90 0 0" radius="0.6" color="#CCC" opacity="0.2"></a-circle>
       </a-marker>
 
-      <!-- CAMERA + SIMPLE UI -->
+      <!-- CAMERA + SIMPLE NUMBER -->
       <a-entity camera>
 
         <a-text 
-          value="TEST"
+          id="debugText"
           position="0 0 -1"
-          color="red"
-          width="2"
+          color="white"
           align="center"
+          width="1.5"
+          value="0.00"
           always-on-top>
         </a-text>
 
